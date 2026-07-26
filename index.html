@@ -30,25 +30,37 @@
             z-index: 1;
         }
 
-        /* Floating Export Button */
-        .export-btn {
+        /* Top Action Bar für Buttons */
+        .top-bar {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 15px;
+            right: 15px;
             z-index: 1000;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+            max-width: calc(100% - 30px);
+        }
+
+        .action-btn {
             background: #2196F3;
             color: #fff;
             border: none;
-            padding: 10px 16px;
+            padding: 8px 12px;
             border-radius: 20px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
+
+        .action-btn.export { background: #4CAF50; }
+        .action-btn.save { background: #2196F3; }
+        .action-btn.load { background: #9C27B0; }
 
         /* Floating GPS Button */
         .gps-btn {
@@ -173,36 +185,26 @@
             text-align: center;
         }
 
-        .btn-add {
-            background: #2196F3;
-            color: #fff;
-        }
-
-        .btn-save {
-            background: #ff9800;
-            color: #000;
-        }
-
-        .btn-delete-building {
-            background: #333;
-            color: #ff5252;
-            margin-top: 10px;
-        }
-
-        .btn-delete-party {
-            background: transparent;
-            color: #ff5252;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 0 5px;
-        }
+        .btn-add { background: #2196F3; color: #fff; }
+        .btn-save { background: #ff9800; color: #000; }
+        .btn-delete-building { background: #333; color: #ff5252; margin-top: 10px; }
+        .btn-delete-party { background: transparent; color: #ff5252; border: none; font-size: 18px; cursor: pointer; padding: 0 5px; }
     </style>
 </head>
 <body>
 
     <div id="map"></div>
-    <button class="export-btn" onclick="exportToCSV()">📥 Excel Export</button>
+
+    <!-- Menü oben rechts -->
+    <div class="top-bar">
+        <button class="action-btn save" onclick="saveToFile()">💾 Sichern</button>
+        <button class="action-btn load" onclick="document.getElementById('fileInput').click()">📂 Öffnen</button>
+        <button class="action-btn export" onclick="exportToCSV()">📊 Excel</button>
+    </div>
+
+    <!-- Versteckter Datei-Input zum Laden von Backups -->
+    <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="loadFromFile(event)">
+
     <button class="gps-btn" onclick="locateUser()">🎯</button>
 
     <!-- Modal für Mehrfamilienhaus / Parteien -->
@@ -236,7 +238,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Karte initialisieren
         const map = L.map('map').setView([50.8, 12.6], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -248,7 +249,6 @@
         let activeBuildingIndex = null;
         let markersGroup = L.layerGroup().addTo(map);
 
-        // Custom Marker mit Anzahl der Parteien
         function createBuildingIcon(partyCount) {
             return L.divIcon({
                 className: 'custom-building-pin',
@@ -273,7 +273,6 @@
             });
         }
 
-        // Alle Marker rendern
         function renderMarkers() {
             markersGroup.clearLayers();
 
@@ -289,7 +288,6 @@
             });
         }
 
-        // Klick auf Karte = Neues Gebäude/Eingang anlegen
         map.on('click', function(e) {
             const newBuilding = {
                 lat: e.latlng.lat,
@@ -306,7 +304,6 @@
             openModal(buildings.length - 1);
         });
 
-        // Modal öffnen
         function openModal(index) {
             activeBuildingIndex = index;
             const bld = buildings[index];
@@ -322,7 +319,6 @@
             activeBuildingIndex = null;
         }
 
-        // Parteien im Modal rendern
         function renderParties(parties) {
             const container = document.getElementById('partiesContainer');
             container.innerHTML = '';
@@ -397,41 +393,63 @@
             }
         }
 
+        // Automatisches Speichern im Browser-Speicher
         function saveStorage() {
             localStorage.setItem('d2d_buildings', JSON.stringify(buildings));
         }
 
-        function locateUser() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    map.setView([lat, lng], 18);
-
-                    L.circle([lat, lng], {
-                        color: '#2196F3',
-                        fillColor: '#2196F3',
-                        fillOpacity: 0.3,
-                        radius: 10
-                    }).addTo(map);
-                }, () => {
-                    alert("Standort konnte nicht ermittelt werden. Bitte aktiviere GPS.");
-                });
+        // --- NEU: MANUELLES SICHERN ALS DATEI ---
+        function saveToFile() {
+            if (buildings.length === 0) {
+                alert("Keine Daten zum Sichern vorhanden!");
+                return;
             }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `D2D_Backup_${today}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
         }
 
-        // CSV / Excel Export-Funktion
+        // --- NEU: MANUELLES ÖFFNEN EINER GESICHERTEN DATEI ---
+        function loadFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (Array.isArray(loadedData)) {
+                        if (confirm("Möchtest du diese Sicherung laden? Deine aktuellen Stecknadeln auf der Karte werden dadurch ersetzt.")) {
+                            buildings = loadedData;
+                            saveStorage();
+                            renderMarkers();
+                            alert("Daten erfolgreich geladen!");
+                        }
+                    } else {
+                        alert("Ungültiges Dateiformat.");
+                    }
+                } catch (err) {
+                    alert("Fehler beim Lesen der Datei.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
         function exportToCSV() {
             if (buildings.length === 0) {
                 alert("Keine Daten zum Exportieren vorhanden!");
                 return;
             }
 
-            // Spaltenüberschriften für Excel
-            let csvContent = "\uFEFF"; // Byte Order Mark für saubere deutsche Umlaute in Excel
+            let csvContent = "\uFEFF";
             csvContent += "Adresse;Etage;Name;Status;Notiz;Breitengrad (Lat);Längengrad (Lng)\n";
 
-            // Status-Namen übersetzen
             const statusMap = {
                 'offen': 'Offen',
                 'geklingelt': 'Geklingelt / Gespräch',
@@ -458,7 +476,6 @@
                 }
             });
 
-            // Datei-Download anstoßen
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -469,6 +486,25 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    map.setView([lat, lng], 18);
+
+                    L.circle([lat, lng], {
+                        color: '#2196F3',
+                        fillColor: '#2196F3',
+                        fillOpacity: 0.3,
+                        radius: 10
+                    }).addTo(map);
+                }, () => {
+                    alert("Standort konnte nicht ermittelt werden. Bitte aktiviere GPS.");
+                });
+            }
         }
 
         // Start
