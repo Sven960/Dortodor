@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Door to Door Multi-Party Tracker</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body, html {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #121212;
+            color: #fff;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Floating Export Button */
+        .export-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: #2196F3;
+            color: #fff;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Floating GPS Button */
+        .gps-btn {
+            position: absolute;
+            bottom: 30px;
+            right: 20px;
+            z-index: 1000;
+            background: #ff9800;
+            color: #000;
+            border: none;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Modal Overlay für das Parteien-Interface */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .modal-container {
+            background: #1e1e1e;
+            width: 100%;
+            max-width: 500px;
+            max-height: 85vh;
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
+            overflow-y: auto;
+        }
+
+        @media (min-width: 600px) {
+            .modal-overlay {
+                align-items: center;
+            }
+            .modal-container {
+                border-radius: 16px;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.2rem;
+            color: #ff9800;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: #aaa;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .party-card {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-left: 5px solid #888;
+        }
+
+        .party-card.offen { border-left-color: #888; }
+        .party-card.geklingelt { border-left-color: #ffc107; }
+        .party-card.nicht_da { border-left-color: #f44336; }
+        .party-card.erfolg { border-left-color: #4caf50; }
+
+        .party-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        input, select, textarea {
+            background: #181818;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: #ff9800;
+            outline: none;
+        }
+
+        .btn {
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .btn-add {
+            background: #2196F3;
+            color: #fff;
+        }
+
+        .btn-save {
+            background: #ff9800;
+            color: #000;
+        }
+
+        .btn-delete-building {
+            background: #333;
+            color: #ff5252;
+            margin-top: 10px;
+        }
+
+        .btn-delete-party {
+            background: transparent;
+            color: #ff5252;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    <button class="export-btn" onclick="exportToCSV()">📥 Excel Export</button>
+    <button class="gps-btn" onclick="locateUser()">🎯</button>
+
+    <!-- Modal für Mehrfamilienhaus / Parteien -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="modalTitle">Gebäude verwalten</h2>
+                <button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+
+            <div>
+                <label style="font-size: 12px; color: #aaa;">Adresse / Hausnummer / Bezeichnung:</label>
+                <input type="text" id="buildingAddress" placeholder="z. B. Hauptstraße 12">
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                <h3 style="font-size: 1rem;">Parteien / Bewohner</h3>
+                <button class="btn btn-add" onclick="addParty()">+ Partei hinzufügen</button>
+            </div>
+
+            <div id="partiesContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Parteien werden hier dynamisch eingefügt -->
+            </div>
+
+            <button class="btn btn-save" onclick="saveCurrentBuilding()">Speichern & Schließen</button>
+            <button class="btn btn-delete-building" onclick="deleteCurrentBuilding()">Eingang / Gebäude komplett löschen</button>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Karte initialisieren
+        const map = L.map('map').setView([50.8, 12.6], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let buildings = JSON.parse(localStorage.getItem('d2d_buildings')) || [];
+        let activeBuildingIndex = null;
+        let markersGroup = L.layerGroup().addTo(map);
+
+        // Custom Marker mit Anzahl der Parteien
+        function createBuildingIcon(partyCount) {
+            return L.divIcon({
+                className: 'custom-building-pin',
+                html: `
+                    <div style="
+                        background-color: #ff9800; 
+                        color: #000; 
+                        font-weight: bold; 
+                        font-size: 11px;
+                        width: 26px; 
+                        height: 26px; 
+                        border-radius: 50%; 
+                        border: 2px solid white; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.6);">
+                        ${partyCount}
+                    </div>`,
+                iconSize: [26, 26],
+                iconAnchor: [13, 13]
+            });
+        }
+
+        // Alle Marker rendern
+        function renderMarkers() {
+            markersGroup.clearLayers();
+
+            buildings.forEach((bld, index) => {
+                const count = bld.parties ? bld.parties.length : 0;
+                const marker = L.marker([bld.lat, bld.lng], { icon: createBuildingIcon(count) });
+
+                marker.on('click', () => {
+                    openModal(index);
+                });
+
+                markersGroup.addLayer(marker);
+            });
+        }
+
+        // Klick auf Karte = Neues Gebäude/Eingang anlegen
+        map.on('click', function(e) {
+            const newBuilding = {
+                lat: e.latlng.lat,
+                lng: e.latlng.lng,
+                address: '',
+                parties: [
+                    { name: '', floor: 'EG', status: 'offen', note: '' }
+                ]
+            };
+
+            buildings.push(newBuilding);
+            saveStorage();
+            renderMarkers();
+            openModal(buildings.length - 1);
+        });
+
+        // Modal öffnen
+        function openModal(index) {
+            activeBuildingIndex = index;
+            const bld = buildings[index];
+
+            document.getElementById('buildingAddress').value = bld.address || '';
+            renderParties(bld.parties);
+
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            activeBuildingIndex = null;
+        }
+
+        // Parteien im Modal rendern
+        function renderParties(parties) {
+            const container = document.getElementById('partiesContainer');
+            container.innerHTML = '';
+
+            if (!parties || parties.length === 0) {
+                container.innerHTML = '<p style="color: #888; font-size: 13px;">Noch keine Parteien eingetragen.</p>';
+                return;
+            }
+
+            parties.forEach((party, pIndex) => {
+                const card = document.createElement('div');
+                card.className = `party-card ${party.status}`;
+
+                card.innerHTML = `
+                    <div class="party-row" style="justify-content: space-between; align-items: center;">
+                        <input type="text" placeholder="Etage / Lage (z.B. 1. OG li.)" value="${party.floor || ''}" onchange="updateParty(${pIndex}, 'floor', this.value)" style="flex: 1;">
+                        <button class="btn-delete-party" onclick="removeParty(${pIndex})">✕</button>
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Name an der Klingel" value="${party.name || ''}" onchange="updateParty(${pIndex}, 'name', this.value)">
+                    </div>
+                    <div class="party-row">
+                        <select onchange="updateParty(${pIndex}, 'status', this.value); this.closest('.party-card').className = 'party-card ' + this.value;">
+                            <option value="offen" ${party.status === 'offen' ? 'selected' : ''}>⚪ Offen</option>
+                            <option value="geklingelt" ${party.status === 'geklingelt' ? 'selected' : ''}>🟡 Geklingelt / Gespräch</option>
+                            <option value="nicht_da" ${party.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
+                            <option value="erfolg" ${party.status === 'erfolg' ? 'selected' : ''}>🟢 Erfolg / Termin</option>
+                        </select>
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Notiz (z.B. Wunschuhrzeit, Rückruf...)" value="${party.note || ''}" onchange="updateParty(${pIndex}, 'note', this.value)">
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function addParty() {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.push({ name: '', floor: '', status: 'offen', note: '' });
+            renderParties(buildings[activeBuildingIndex].parties);
+        }
+
+        function updateParty(partyIndex, field, value) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties[partyIndex][field] = value;
+        }
+
+        function removeParty(partyIndex) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.splice(partyIndex, 1);
+            renderParties(buildings[activeBuildingIndex].parties);
+        }
+
+        function saveCurrentBuilding() {
+            if (activeBuildingIndex !== null) {
+                const addr = document.getElementById('buildingAddress').value;
+                buildings[activeBuildingIndex].address = addr;
+                saveStorage();
+                renderMarkers();
+            }
+            closeModal();
+        }
+
+        function deleteCurrentBuilding() {
+            if (activeBuildingIndex !== null && confirm("Möchtest du diesen Eingang mit allen eingetragenen Parteien wirklich löschen?")) {
+                buildings.splice(activeBuildingIndex, 1);
+                saveStorage();
+                renderMarkers();
+                closeModal();
+            }
+        }
+
+        function saveStorage() {
+            localStorage.setItem('d2d_buildings', JSON.stringify(buildings));
+        }
+
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    map.setView([lat, lng], 18);
+
+                    L.circle([lat, lng], {
+                        color: '#2196F3',
+                        fillColor: '#2196F3',
+                        fillOpacity: 0.3,
+                        radius: 10
+                    }).addTo(map);
+                }, () => {
+                    alert("Standort konnte nicht ermittelt werden. Bitte aktiviere GPS.");
+                });
+            }
+        }
+
+        // CSV / Excel Export-Funktion
+        function exportToCSV() {
+            if (buildings.length === 0) {
+                alert("Keine Daten zum Exportieren vorhanden!");
+                return;
+            }
+
+            // Spaltenüberschriften für Excel
+            let csvContent = "\uFEFF"; // Byte Order Mark für saubere deutsche Umlaute in Excel
+            csvContent += "Adresse;Etage;Name;Status;Notiz;Breitengrad (Lat);Längengrad (Lng)\n";
+
+            // Status-Namen übersetzen
+            const statusMap = {
+                'offen': 'Offen',
+                'geklingelt': 'Geklingelt / Gespräch',
+                'nicht_da': 'Nicht da',
+                'erfolg': 'Erfolg / Termin'
+            };
+
+            buildings.forEach(bld => {
+                const addr = `"${(bld.address || 'Unbenannt').replace(/"/g, '""')}"`;
+                const lat = bld.lat;
+                const lng = bld.lng;
+
+                if (bld.parties && bld.parties.length > 0) {
+                    bld.parties.forEach(party => {
+                        const floor = `"${(party.floor || '').replace(/"/g, '""')}"`;
+                        const name = `"${(party.name || '').replace(/"/g, '""')}"`;
+                        const status = `"${statusMap[party.status] || party.status}"`;
+                        const note = `"${(party.note || '').replace(/"/g, '""')}"`;
+
+                        csvContent += `${addr};${floor};${name};${status};${note};${lat};${lng}\n`;
+                    });
+                } else {
+                    csvContent += `${addr};"";"";"Keine Parteien";"";${lat};${lng}\n`;
+                }
+            });
+
+            // Datei-Download anstoßen
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const today = new Date().toISOString().slice(0, 10);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `D2D_Export_${today}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Start
+        renderMarkers();
+        locateUser();
+    </script>
+</body>
+</html>
