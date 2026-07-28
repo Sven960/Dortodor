@@ -337,7 +337,7 @@
             </div>
 
             <div>
-                <label style="font-size: 11px; color: #aaa;">Adresse / Hausnummer:</label>
+                <label style="font-size: 11px; color: #aaa;">Adresse / Hausnummer / Ort:</label>
                 <input type="text" id="buildingAddress" placeholder="Wird ermittelt...">
             </div>
 
@@ -370,18 +370,47 @@
         let markersGroup = L.layerGroup().addTo(map);
         let searchDebounceTimeout = null;
 
+        // Initiales Rendern der gespeicherten Marker beim Start
+        renderMarkers();
+
+        function saveStorage() {
+            localStorage.setItem('d2d_energy_buildings', JSON.stringify(buildings));
+        }
+
+        function formatFullAddress(addr, fallbackDisplayName = '') {
+            if (!addr) return fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '';
+            
+            const road = addr.road || addr.pedestrian || addr.suburb || '';
+            const houseNumber = addr.house_number || '';
+            const strasse = `${road} ${houseNumber}`.trim();
+            
+            const plz = addr.postcode || '';
+            const ort = addr.city || addr.town || addr.village || addr.municipality || '';
+            const stadtteil = addr.suburb || addr.quarter || addr.neighbourhood || addr.hamlet || '';
+            
+            let result = strasse;
+            if (plz || ort) {
+                const plzOrt = `${plz} ${ort}`.trim();
+                result = result ? `${result}, ${plzOrt}` : plzOrt;
+            }
+            if (stadtteil && stadtteil !== ort && !result.includes(stadtteil)) {
+                result += ` (${stadtteil})`;
+            }
+            return result || (fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '');
+        }
+
         function getBuildingColor(parties) {
             if (!parties || parties.length === 0) return '#888888';
             
             const statuses = parties.map(p => p.status);
             
-            if (statuses.includes('erfolg')) return '#4caf50'; // Grün
-            if (statuses.includes('termin')) return '#9c27b0'; // Violett
-            if (statuses.includes('angebot')) return '#ffc107'; // Gelb
-            if (statuses.includes('nicht_da')) return '#f44336'; // Rot
-            if (statuses.every(s => s === 'kein_interesse')) return '#424242'; // Dunkelgrau
+            if (statuses.includes('erfolg')) return '#4caf50';
+            if (statuses.includes('termin')) return '#9c27b0';
+            if (statuses.includes('angebot')) return '#ffc107';
+            if (statuses.includes('nicht_da')) return '#f44336';
+            if (statuses.every(s => s === 'kein_interesse')) return '#424242';
             
-            return '#888888'; // Grau (Offen)
+            return '#888888';
         }
 
         function createBuildingIcon(partyCount, color) {
@@ -469,12 +498,7 @@
                     const data = await response.json();
 
                     if (data && data.address) {
-                        const road = data.address.road || data.address.pedestrian || data.address.suburb || '';
-                        const houseNumber = data.address.house_number || '';
-                        let fetchedAddress = `${road} ${houseNumber}`.trim();
-
-                        if (!fetchedAddress) fetchedAddress = data.display_name.split(',')[0];
-
+                        const fetchedAddress = formatFullAddress(data.address, data.display_name);
                         buildings[newIndex].address = fetchedAddress;
                         document.getElementById('buildingAddress').value = fetchedAddress;
                         saveStorage();
@@ -521,14 +545,10 @@
                             item.onclick = () => {
                                 const lat = parseFloat(place.lat);
                                 const lon = parseFloat(place.lon);
-
-                                const road = place.address.road || place.address.pedestrian || '';
-                                const houseNumber = place.address.house_number || '';
-                                let shortAddress = `${road} ${houseNumber}`.trim();
-                                if (!shortAddress) shortAddress = place.display_name.split(',')[0];
+                                const fullAddress = formatFullAddress(place.address, place.display_name);
 
                                 map.setView([lat, lon], 18);
-                                createNewBuildingAt(lat, lon, shortAddress);
+                                createNewBuildingAt(lat, lon, fullAddress);
 
                                 resultsDiv.style.display = 'none';
                                 document.getElementById('searchInput').value = '';
@@ -556,8 +576,7 @@
             const bld = buildings[index];
 
             document.getElementById('buildingAddress').value = bld.address || '';
-            renderParties(bld.parties);
-
+            renderParties();
             document.getElementById('modalOverlay').style.display = 'flex';
         }
 
@@ -566,14 +585,168 @@
             activeBuildingIndex = null;
         }
 
-        function renderParties(parties) {
+        function renderParties() {
             const container = document.getElementById('partiesContainer');
             container.innerHTML = '';
 
-            if (!parties || parties.length === 0) {
-                container.innerHTML = '<p style="color: #888; font-size: 12px;">Noch keine Parteien angelegt.</p>';
-                return;
-            }
+            if (activeBuildingIndex === null) return;
+            const bld = buildings[activeBuildingIndex];
 
-            parties.forEach((party, pIndex) => {
-                const card =
+            bld.parties.forEach((party, pIndex) => {
+                const card = document.createElement('div');
+                card.className = `party-card ${party.status || 'offen'}`;
+
+                card.innerHTML = `
+                    <div class="party-row" style="justify-content: space-between; align-items: center;">
+                        <input type="text" placeholder="Etage / Lage (z.B. 1. OG links)" value="${party.floor || ''}" onchange="updateParty(${pIndex}, 'floor', this.value)" style="width: 60%;">
+                        <button class="btn-delete-party" onclick="deleteParty(${pIndex})" title="Partei löschen">🗑️</button>
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Name des Bewohners" value="${party.name || ''}" onchange="updateParty(${pIndex}, 'name', this.value)">
+                        <select onchange="updateParty(${pIndex}, 'status', this.value)">
+                            <option value="offen" ${party.status === 'offen' ? 'selected' : ''}>Offen</option>
+                            <option value="nicht_da" ${party.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
+                            <option value="angebot" ${party.status === 'angebot' ? 'selected' : ''}>🟡 Angebot/Zähler</option>
+                            <option value="termin" ${party.status === 'termin' ? 'selected' : ''}>🟣 Termin</option>
+                            <option value="erfolg" ${party.status === 'erfolg' ? 'selected' : ''}>🟢 Erfolg</option>
+                            <option value="kein_interesse" ${party.status === 'kein_interesse' ? 'selected' : ''}>⚫ Kein Interesse</option>
+                        </select>
+                    </div>
+                    <div class="party-row">
+                        <select onchange="updateParty(${pIndex}, 'sparte', this.value)">
+                            <option value="Strom" ${party.sparte === 'Strom' ? 'selected' : ''}>Strom</option>
+                            <option value="Gas" ${party.sparte === 'Gas' ? 'selected' : ''}>Gas</option>
+                            <option value="Strom & Gas" ${party.sparte === 'Strom & Gas' ? 'selected' : ''}>Strom & Gas</option>
+                        </select>
+                        <input type="text" placeholder="Aktueller Anbieter" value="${party.provider || ''}" onchange="updateParty(${pIndex}, 'provider', this.value)">
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Zählernummer / Verbrauch" value="${party.meterNo || ''}" onchange="updateParty(${pIndex}, 'meterNo', this.value)">
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Notizen / Bemerkung" value="${party.note || ''}" onchange="updateParty(${pIndex}, 'note', this.value)">
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function addParty() {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.push({
+                floor: '',
+                name: '',
+                status: 'offen',
+                sparte: 'Strom',
+                provider: '',
+                meterNo: '',
+                note: ''
+            });
+            renderParties();
+        }
+
+        function updateParty(partyIndex, field, value) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties[partyIndex][field] = value;
+            if (field === 'status') {
+                renderParties();
+            }
+        }
+
+        function deleteParty(partyIndex) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.splice(partyIndex, 1);
+            renderParties();
+        }
+
+        function saveCurrentBuilding() {
+            if (activeBuildingIndex === null) return;
+            const addrInput = document.getElementById('buildingAddress').value;
+            buildings[activeBuildingIndex].address = addrInput;
+            saveStorage();
+            renderMarkers();
+            closeModal();
+        }
+
+        function deleteCurrentBuilding() {
+            if (activeBuildingIndex === null) return;
+            buildings.splice(activeBuildingIndex, 1);
+            saveStorage();
+            renderMarkers();
+            closeModal();
+        }
+
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    map.setView([lat, lng], 18);
+                    L.marker([lat, lng]).addTo(map).bindPopup("Dein Standort").openPopup();
+                }, () => {
+                    alert("Standort konnte nicht ermittelt werden.");
+                });
+            } else {
+                alert("Geolocation wird von deinem Browser nicht unterstützt.");
+            }
+        }
+
+        function saveToFile() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `d2d_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function loadFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    buildings = JSON.parse(e.target.result);
+                    saveStorage();
+                    renderMarkers();
+                    alert("Daten erfolgreich geladen!");
+                } catch (err) {
+                    alert("Fehler beim Lesen der Datei!");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Adresse;Etage;Name;Status;Sparte;Anbieter;Zaelernummer;Notiz\n";
+
+            buildings.forEach(b => {
+                const addr = `"${(b.address || '').replace(/"/g, '""')}"`;
+                (b.parties || []).forEach(p => {
+                    const row = [
+                        addr,
+                        `"${(p.floor || '').replace(/"/g, '""')}"`,
+                        `"${(p.name || '').replace(/"/g, '""')}"`,
+                        `"${(p.status || '').replace(/"/g, '""')}"`,
+                        `"${(p.sparte || '').replace(/"/g, '""')}"`,
+                        `"${(p.provider || '').replace(/"/g, '""')}"`,
+                        `"${(p.meterNo || '').replace(/"/g, '""')}"`,
+                        `"${(p.note || '').replace(/"/g, '""')}"`
+                    ];
+                    csvContent += row.join(";") + "\n";
+                });
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `d2d_export_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+    </script>
+</body>
+</html>
