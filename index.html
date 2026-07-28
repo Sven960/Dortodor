@@ -30,17 +30,25 @@
             z-index: 1;
         }
 
-        /* Top Action Bar für Buttons */
-        .top-bar {
+        /* Rechte Steuerungs-Spalte für Buttons + Suchfeld */
+        .right-controls {
             position: absolute;
             top: 15px;
             right: 15px;
             z-index: 1000;
             display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            max-width: calc(100% - 30px);
+        }
+
+        /* Top Action Bar für Buttons oben rechts */
+        .top-bar {
+            display: flex;
             flex-wrap: wrap;
             gap: 8px;
             justify-content: flex-end;
-            max-width: calc(100% - 30px);
         }
 
         .action-btn {
@@ -61,6 +69,57 @@
         .action-btn.export { background: #4CAF50; }
         .action-btn.save { background: #2196F3; }
         .action-btn.load { background: #9C27B0; }
+
+        /* Suchleiste UNTER den Buttons */
+        .search-container {
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .search-input-wrapper {
+            display: flex;
+            background: #1e1e1e;
+            border-radius: 25px;
+            padding: 4px 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            border: 1px solid #333;
+            align-items: center;
+        }
+
+        .search-input-wrapper input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            padding: 6px 8px;
+            font-size: 13px;
+            width: 100%;
+            outline: none;
+        }
+
+        .search-results {
+            background: #1e1e1e;
+            border-radius: 12px;
+            margin-top: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            display: none;
+            border: 1px solid #333;
+            text-align: left;
+        }
+
+        .search-item {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid #2a2a2a;
+            cursor: pointer;
+            color: #ddd;
+        }
+
+        .search-item:hover, .search-item:active {
+            background: #2a2a2a;
+            color: #ff9800;
+        }
 
         /* Floating GPS Button */
         .gps-btn {
@@ -195,11 +254,23 @@
 
     <div id="map"></div>
 
-    <!-- Menü oben rechts -->
-    <div class="top-bar">
-        <button class="action-btn save" onclick="saveToFile()">💾 Sichern</button>
-        <button class="action-btn load" onclick="document.getElementById('fileInput').click()">📂 Öffnen</button>
-        <button class="action-btn export" onclick="exportToCSV()">📊 Excel</button>
+    <!-- Rechte Steuerungs-Spalte -->
+    <div class="right-controls">
+        <!-- Menü oben rechts -->
+        <div class="top-bar">
+            <button class="action-btn save" onclick="saveToFile()">💾 Sichern</button>
+            <button class="action-btn load" onclick="document.getElementById('fileInput').click()">📂 Öffnen</button>
+            <button class="action-btn export" onclick="exportToCSV()">📊 Excel</button>
+        </div>
+
+        <!-- Adress-Suchleiste DIREKT DARUNTER -->
+        <div class="search-container">
+            <div class="search-input-wrapper">
+                <span>🔍</span>
+                <input type="text" id="searchInput" placeholder="Adresse suchen..." oninput="handleSearchInput(this.value)">
+            </div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
     </div>
 
     <!-- Versteckter Datei-Input -->
@@ -248,6 +319,7 @@
         let buildings = JSON.parse(localStorage.getItem('d2d_buildings')) || [];
         let activeBuildingIndex = null;
         let markersGroup = L.layerGroup().addTo(map);
+        let searchDebounceTimeout = null;
 
         function createBuildingIcon(partyCount) {
             return L.divIcon({
@@ -288,15 +360,11 @@
             });
         }
 
-        // Klick auf Karte: Ermittelt Adresse automatisch
-        map.on('click', async function(e) {
-            const lat = e.latlng.lat;
-            const lng = e.latlng.lng;
-
+        async function createNewBuildingAt(lat, lng, defaultAddress = '') {
             const newBuilding = {
                 lat: lat,
                 lng: lng,
-                address: 'Adresse wird geladen...',
+                address: defaultAddress || 'Adresse wird geladen...',
                 parties: [
                     { name: '', floor: 'EG', status: 'offen', note: '' }
                 ]
@@ -308,31 +376,93 @@
             renderMarkers();
             openModal(newIndex);
 
-            // Adresse über Nominatim API im Hintergrund abfragen
-            try {
-                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
-                const data = await response.json();
+            if (!defaultAddress) {
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                    const data = await response.json();
 
-                if (data && data.address) {
-                    const road = data.address.road || data.address.pedestrian || data.address.suburb || '';
-                    const houseNumber = data.address.house_number || '';
-                    let fetchedAddress = `${road} ${houseNumber}`.trim();
+                    if (data && data.address) {
+                        const road = data.address.road || data.address.pedestrian || data.address.suburb || '';
+                        const houseNumber = data.address.house_number || '';
+                        let fetchedAddress = `${road} ${houseNumber}`.trim();
 
-                    if (!fetchedAddress) {
-                        fetchedAddress = data.display_name.split(',')[0];
+                        if (!fetchedAddress) {
+                            fetchedAddress = data.display_name.split(',')[0];
+                        }
+
+                        buildings[newIndex].address = fetchedAddress;
+                        document.getElementById('buildingAddress').value = fetchedAddress;
+                        saveStorage();
+                    } else {
+                        buildings[newIndex].address = '';
+                        document.getElementById('buildingAddress').value = '';
                     }
-
-                    buildings[newIndex].address = fetchedAddress;
-                    document.getElementById('buildingAddress').value = fetchedAddress;
-                    saveStorage();
-                } else {
+                } catch (error) {
+                    console.error("Fehler bei der Adressermittlung:", error);
                     buildings[newIndex].address = '';
                     document.getElementById('buildingAddress').value = '';
                 }
-            } catch (error) {
-                console.error("Fehler bei der Adressermittlung:", error);
-                buildings[newIndex].address = '';
-                document.getElementById('buildingAddress').value = '';
+            }
+        }
+
+        map.on('click', function(e) {
+            createNewBuildingAt(e.latlng.lat, e.latlng.lng);
+        });
+
+        function handleSearchInput(query) {
+            clearTimeout(searchDebounceTimeout);
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (!query || query.trim().length < 3) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            searchDebounceTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&countrycodes=de`);
+                    const results = await response.json();
+
+                    resultsDiv.innerHTML = '';
+
+                    if (results.length === 0) {
+                        resultsDiv.innerHTML = '<div class="search-item" style="color: #888;">Keine Adresse gefunden</div>';
+                    } else {
+                        results.forEach(place => {
+                            const item = document.createElement('div');
+                            item.className = 'search-item';
+                            item.innerText = place.display_name;
+
+                            item.onclick = () => {
+                                const lat = parseFloat(place.lat);
+                                const lon = parseFloat(place.lon);
+
+                                const road = place.address.road || place.address.pedestrian || '';
+                                const houseNumber = place.address.house_number || '';
+                                let shortAddress = `${road} ${houseNumber}`.trim();
+                                if (!shortAddress) shortAddress = place.display_name.split(',')[0];
+
+                                map.setView([lat, lon], 18);
+                                createNewBuildingAt(lat, lon, shortAddress);
+
+                                resultsDiv.style.display = 'none';
+                                document.getElementById('searchInput').value = '';
+                            };
+
+                            resultsDiv.appendChild(item);
+                        });
+                    }
+
+                    resultsDiv.style.display = 'block';
+                } catch (err) {
+                    console.error("Fehler bei Suchanfrage:", err);
+                }
+            }, 300);
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-container')) {
+                document.getElementById('searchResults').style.display = 'none';
             }
         });
 
