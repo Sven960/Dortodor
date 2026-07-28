@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Door to Door Multi-Party Tracker</title>
+    <title>D2D Energie Sales Tracker</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -30,24 +30,76 @@
             z-index: 1;
         }
 
-        /* Rechte Steuerungs-Spalte für Buttons + Suchfeld */
+        /* Leaflet Zoom-Control sichtbar halten */
+        .leaflet-top.leaflet-left {
+            top: 10px;
+            left: 10px;
+        }
+
+        /* Kompakte Filter-Bar oben links (rechts neben den Zoom-Buttons platziert) */
+        .filter-bar {
+            position: absolute;
+            top: 12px;
+            left: 60px; /* Versatz nach rechts, damit + / - frei bleiben */
+            z-index: 1000;
+            display: flex;
+            gap: 4px;
+            background: rgba(20, 20, 20, 0.85);
+            backdrop-filter: blur(5px);
+            padding: 4px 6px;
+            border-radius: 16px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            max-width: calc(100% - 75px);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Scrollbar für Filter auf Mobilgeräten ausblenden */
+        .filter-bar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .filter-btn {
+            background: #2a2a2a;
+            color: #ccc;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .filter-btn.active {
+            background: #ff9800;
+            color: #000;
+        }
+
+        /* Rechte Steuerungs-Spalte */
         .right-controls {
             position: absolute;
-            top: 15px;
-            right: 15px;
+            top: 52px;
+            right: 12px;
             z-index: 1000;
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-            gap: 10px;
-            max-width: calc(100% - 30px);
+            gap: 8px;
+            max-width: calc(100% - 24px);
         }
 
-        /* Top Action Bar für Buttons oben rechts */
+        @media (min-width: 600px) {
+            .right-controls { top: 12px; }
+        }
+
         .top-bar {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             justify-content: flex-end;
         }
 
@@ -55,32 +107,28 @@
             background: #2196F3;
             color: #fff;
             border: none;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 13px;
+            padding: 7px 11px;
+            border-radius: 18px;
+            font-size: 11px;
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 5px;
         }
 
         .action-btn.export { background: #4CAF50; }
         .action-btn.save { background: #2196F3; }
         .action-btn.load { background: #9C27B0; }
 
-        /* Suchleiste UNTER den Buttons */
         .search-container {
             width: 100%;
-            max-width: 280px;
+            max-width: 250px;
         }
 
         .search-input-wrapper {
             display: flex;
             background: #1e1e1e;
-            border-radius: 25px;
-            padding: 4px 12px;
+            border-radius: 20px;
+            padding: 3px 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.6);
             border: 1px solid #333;
             align-items: center;
@@ -90,8 +138,8 @@
             background: transparent;
             border: none;
             color: #fff;
-            padding: 6px 8px;
-            font-size: 13px;
+            padding: 5px 6px;
+            font-size: 12px;
             width: 100%;
             outline: none;
         }
@@ -109,19 +157,18 @@
         }
 
         .search-item {
-            padding: 10px 14px;
-            font-size: 13px;
+            padding: 8px 12px;
+            font-size: 12px;
             border-bottom: 1px solid #2a2a2a;
             cursor: pointer;
             color: #ddd;
         }
 
-        .search-item:hover, .search-item:active {
+        .search-item:hover {
             background: #2a2a2a;
             color: #ff9800;
         }
 
-        /* Floating GPS Button */
         .gps-btn {
             position: absolute;
             bottom: 30px;
@@ -130,10 +177,10 @@
             background: #ff9800;
             color: #000;
             border: none;
-            width: 56px;
-            height: 56px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            font-size: 24px;
+            font-size: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             cursor: pointer;
             display: flex;
@@ -141,7 +188,7 @@
             justify-content: center;
         }
 
-        /* Modal Overlay für das Parteien-Interface */
+        /* Modal Overlay */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -149,7 +196,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.75);
             z-index: 2000;
             justify-content: center;
             align-items: flex-end;
@@ -158,25 +205,21 @@
         .modal-container {
             background: #1e1e1e;
             width: 100%;
-            max-width: 500px;
-            max-height: 85vh;
+            max-width: 520px;
+            max-height: 88vh;
             border-top-left-radius: 20px;
             border-top-right-radius: 20px;
-            padding: 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
             box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
             overflow-y: auto;
         }
 
         @media (min-width: 600px) {
-            .modal-overlay {
-                align-items: center;
-            }
-            .modal-container {
-                border-radius: 16px;
-            }
+            .modal-overlay { align-items: center; }
+            .modal-container { border-radius: 16px; }
         }
 
         .modal-header {
@@ -184,53 +227,53 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #333;
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
 
-        .modal-header h2 {
-            font-size: 1.2rem;
-            color: #ff9800;
-        }
+        .modal-header h2 { font-size: 1.1rem; color: #ff9800; }
 
         .close-btn {
             background: transparent;
             border: none;
             color: #aaa;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
         }
 
+        /* Parteien-Karten Styling */
         .party-card {
-            background: #2a2a2a;
+            background: #262626;
             border-radius: 10px;
-            padding: 12px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             gap: 8px;
             border-left: 5px solid #888;
         }
 
-        .party-card.offen { border-left-color: #888; }
-        .party-card.geklingelt { border-left-color: #ffc107; }
+        .party-card.offen { border-left-color: #888888; }
         .party-card.nicht_da { border-left-color: #f44336; }
+        .party-card.angebot { border-left-color: #ffc107; }
         .party-card.erfolg { border-left-color: #4caf50; }
+        .party-card.termin { border-left-color: #9c27b0; }
+        .party-card.kein_interesse { border-left-color: #424242; }
 
         .party-row {
             display: flex;
-            gap: 8px;
+            gap: 6px;
         }
 
-        input, select, textarea {
+        input, select {
             background: #181818;
             border: 1px solid #333;
             color: #fff;
-            padding: 8px 10px;
+            padding: 6px 8px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 12px;
             width: 100%;
         }
 
-        input:focus, select:focus, textarea:focus {
+        input:focus, select:focus {
             border-color: #ff9800;
             outline: none;
         }
@@ -242,28 +285,36 @@
             font-weight: bold;
             cursor: pointer;
             text-align: center;
+            font-size: 12px;
         }
 
         .btn-add { background: #2196F3; color: #fff; }
         .btn-save { background: #ff9800; color: #000; }
-        .btn-delete-building { background: #333; color: #ff5252; margin-top: 10px; }
-        .btn-delete-party { background: transparent; color: #ff5252; border: none; font-size: 18px; cursor: pointer; padding: 0 5px; }
+        .btn-delete-building { background: #333; color: #ff5252; margin-top: 6px; }
+        .btn-delete-party { background: transparent; color: #ff5252; border: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
     </style>
 </head>
 <body>
 
     <div id="map"></div>
 
+    <!-- Kompakte Filter-Bar oben links (neben den Zoom-Buttons) -->
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="setFilter('alle', this)">Alle</button>
+        <button class="filter-btn" onclick="setFilter('nicht_da', this)">🔴 Nicht da</button>
+        <button class="filter-btn" onclick="setFilter('angebot', this)">🟡 Angebot/Zähler</button>
+        <button class="filter-btn" onclick="setFilter('termin', this)">🟣 Termin</button>
+        <button class="filter-btn" onclick="setFilter('erfolg', this)">🟢 Erfolge</button>
+    </div>
+
     <!-- Rechte Steuerungs-Spalte -->
     <div class="right-controls">
-        <!-- Menü oben rechts -->
         <div class="top-bar">
             <button class="action-btn save" onclick="saveToFile()">💾 Sichern</button>
             <button class="action-btn load" onclick="document.getElementById('fileInput').click()">📂 Öffnen</button>
             <button class="action-btn export" onclick="exportToCSV()">📊 Excel</button>
         </div>
 
-        <!-- Adress-Suchleiste DIREKT DARUNTER -->
         <div class="search-container">
             <div class="search-input-wrapper">
                 <span>🔍</span>
@@ -273,7 +324,6 @@
         </div>
     </div>
 
-    <!-- Versteckter Datei-Input -->
     <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="loadFromFile(event)">
 
     <button class="gps-btn" onclick="locateUser()">🎯</button>
@@ -282,26 +332,24 @@
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 id="modalTitle">Gebäude verwalten</h2>
+                <h2 id="modalTitle">Gebäude & Energieversorgungen</h2>
                 <button class="close-btn" onclick="closeModal()">✕</button>
             </div>
 
             <div>
-                <label style="font-size: 12px; color: #aaa;">Adresse / Hausnummer / Bezeichnung:</label>
-                <input type="text" id="buildingAddress" placeholder="Wird automatisch ermittelt...">
+                <label style="font-size: 11px; color: #aaa;">Adresse / Hausnummer:</label>
+                <input type="text" id="buildingAddress" placeholder="Wird ermittelt...">
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                <h3 style="font-size: 1rem;">Parteien / Bewohner</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                <h3 style="font-size: 0.9rem; color: #eee;">Parteien im Objekt</h3>
                 <button class="btn btn-add" onclick="addParty()">+ Partei hinzufügen</button>
             </div>
 
-            <div id="partiesContainer" style="display: flex; flex-direction: column; gap: 10px;">
-                <!-- Parteien werden hier dynamisch eingefügt -->
-            </div>
+            <div id="partiesContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
 
             <button class="btn btn-save" onclick="saveCurrentBuilding()">Speichern & Schließen</button>
-            <button class="btn btn-delete-building" onclick="deleteCurrentBuilding()">Eingang / Gebäude komplett löschen</button>
+            <button class="btn btn-delete-building" onclick="deleteCurrentBuilding()">Eingang komplett löschen</button>
         </div>
     </div>
 
@@ -316,18 +364,33 @@
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        let buildings = JSON.parse(localStorage.getItem('d2d_buildings')) || [];
+        let buildings = JSON.parse(localStorage.getItem('d2d_energy_buildings')) || [];
         let activeBuildingIndex = null;
+        let activeFilter = 'alle';
         let markersGroup = L.layerGroup().addTo(map);
         let searchDebounceTimeout = null;
 
-        function createBuildingIcon(partyCount) {
+        function getBuildingColor(parties) {
+            if (!parties || parties.length === 0) return '#888888';
+            
+            const statuses = parties.map(p => p.status);
+            
+            if (statuses.includes('erfolg')) return '#4caf50'; // Grün
+            if (statuses.includes('termin')) return '#9c27b0'; // Violett
+            if (statuses.includes('angebot')) return '#ffc107'; // Gelb
+            if (statuses.includes('nicht_da')) return '#f44336'; // Rot
+            if (statuses.every(s => s === 'kein_interesse')) return '#424242'; // Dunkelgrau
+            
+            return '#888888'; // Grau (Offen)
+        }
+
+        function createBuildingIcon(partyCount, color) {
             return L.divIcon({
                 className: 'custom-building-pin',
                 html: `
                     <div style="
-                        background-color: #ff9800; 
-                        color: #000; 
+                        background-color: ${color}; 
+                        color: ${color === '#ffc107' ? '#000' : '#fff'}; 
                         font-weight: bold; 
                         font-size: 11px;
                         width: 26px; 
@@ -349,8 +412,16 @@
             markersGroup.clearLayers();
 
             buildings.forEach((bld, index) => {
-                const count = bld.parties ? bld.parties.length : 0;
-                const marker = L.marker([bld.lat, bld.lng], { icon: createBuildingIcon(count) });
+                const parties = bld.parties || [];
+                
+                if (activeFilter !== 'alle') {
+                    const hasMatchingStatus = parties.some(p => p.status === activeFilter);
+                    if (!hasMatchingStatus) return;
+                }
+
+                const count = parties.length;
+                const pinColor = getBuildingColor(parties);
+                const marker = L.marker([bld.lat, bld.lng], { icon: createBuildingIcon(count, pinColor) });
 
                 marker.on('click', () => {
                     openModal(index);
@@ -360,13 +431,29 @@
             });
         }
 
+        function setFilter(filterType, btnElement) {
+            activeFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+            renderMarkers();
+        }
+
         async function createNewBuildingAt(lat, lng, defaultAddress = '') {
             const newBuilding = {
                 lat: lat,
                 lng: lng,
                 address: defaultAddress || 'Adresse wird geladen...',
                 parties: [
-                    { name: '', floor: 'EG', status: 'offen', note: '' }
+                    { 
+                        floor: 'EG', 
+                        name: '', 
+                        status: 'offen', 
+                        sparte: 'Strom', 
+                        provider: 'Grundversorgung', 
+                        details: '', 
+                        meterNo: '', 
+                        note: '' 
+                    }
                 ]
             };
 
@@ -386,9 +473,7 @@
                         const houseNumber = data.address.house_number || '';
                         let fetchedAddress = `${road} ${houseNumber}`.trim();
 
-                        if (!fetchedAddress) {
-                            fetchedAddress = data.display_name.split(',')[0];
-                        }
+                        if (!fetchedAddress) fetchedAddress = data.display_name.split(',')[0];
 
                         buildings[newIndex].address = fetchedAddress;
                         document.getElementById('buildingAddress').value = fetchedAddress;
@@ -398,7 +483,7 @@
                         document.getElementById('buildingAddress').value = '';
                     }
                 } catch (error) {
-                    console.error("Fehler bei der Adressermittlung:", error);
+                    console.error("Fehler bei Adressermittlung:", error);
                     buildings[newIndex].address = '';
                     document.getElementById('buildingAddress').value = '';
                 }
@@ -486,68 +571,9 @@
             container.innerHTML = '';
 
             if (!parties || parties.length === 0) {
-                container.innerHTML = '<p style="color: #888; font-size: 13px;">Noch keine Parteien eingetragen.</p>';
+                container.innerHTML = '<p style="color: #888; font-size: 12px;">Noch keine Parteien angelegt.</p>';
                 return;
             }
 
             parties.forEach((party, pIndex) => {
-                const card = document.createElement('div');
-                card.className = `party-card ${party.status}`;
-
-                card.innerHTML = `
-                    <div class="party-row" style="justify-content: space-between; align-items: center;">
-                        <input type="text" placeholder="Etage / Lage (z.B. 1. OG li.)" value="${party.floor || ''}" onchange="updateParty(${pIndex}, 'floor', this.value)" style="flex: 1;">
-                        <button class="btn-delete-party" onclick="removeParty(${pIndex})">✕</button>
-                    </div>
-                    <div class="party-row">
-                        <input type="text" placeholder="Name an der Klingel" value="${party.name || ''}" onchange="updateParty(${pIndex}, 'name', this.value)">
-                    </div>
-                    <div class="party-row">
-                        <select onchange="updateParty(${pIndex}, 'status', this.value); this.closest('.party-card').className = 'party-card ' + this.value;">
-                            <option value="offen" ${party.status === 'offen' ? 'selected' : ''}>⚪ Offen</option>
-                            <option value="geklingelt" ${party.status === 'geklingelt' ? 'selected' : ''}>🟡 Geklingelt / Gespräch</option>
-                            <option value="nicht_da" ${party.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
-                            <option value="erfolg" ${party.status === 'erfolg' ? 'selected' : ''}>🟢 Erfolg / Termin</option>
-                        </select>
-                    </div>
-                    <div class="party-row">
-                        <input type="text" placeholder="Notiz (z.B. Wunschuhrzeit, Rückruf...)" value="${party.note || ''}" onchange="updateParty(${pIndex}, 'note', this.value)">
-                    </div>
-                `;
-
-                container.appendChild(card);
-            });
-        }
-
-        function addParty() {
-            if (activeBuildingIndex === null) return;
-            buildings[activeBuildingIndex].parties.push({ name: '', floor: '', status: 'offen', note: '' });
-            renderParties(buildings[activeBuildingIndex].parties);
-        }
-
-        function updateParty(partyIndex, field, value) {
-            if (activeBuildingIndex === null) return;
-            buildings[activeBuildingIndex].parties[partyIndex][field] = value;
-        }
-
-        function removeParty(partyIndex) {
-            if (activeBuildingIndex === null) return;
-            buildings[activeBuildingIndex].parties.splice(partyIndex, 1);
-            renderParties(buildings[activeBuildingIndex].parties);
-        }
-
-        function saveCurrentBuilding() {
-            if (activeBuildingIndex !== null) {
-                const addr = document.getElementById('buildingAddress').value;
-                buildings[activeBuildingIndex].address = addr;
-                saveStorage();
-                renderMarkers();
-            }
-            closeModal();
-        }
-
-        function deleteCurrentBuilding() {
-            if (activeBuildingIndex !== null && confirm("Möchtest du diesen Eingang mit allen eingetragenen Parteien wirklich löschen?")) {
-                buildings.splice(activeBuildingIndex, 1);
-                saveStorage();
-          
+                const card =
