@@ -370,32 +370,29 @@
         let markersGroup = L.layerGroup().addTo(map);
         let searchDebounceTimeout = null;
 
-        // Initiales Rendern der gespeicherten Marker beim Start
-        renderMarkers();
-
         function saveStorage() {
             localStorage.setItem('d2d_energy_buildings', JSON.stringify(buildings));
         }
 
+        // KORRIGIERTE Hilfsfunktion: Priorisiert Hauptgemeinden (Sankt Egidien) vor Ortsteilen (Kuhschnappel)
         function formatFullAddress(addr, fallbackDisplayName = '') {
             if (!addr) return fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '';
             
-            const road = addr.road || addr.pedestrian || addr.suburb || '';
+            const road = addr.road || addr.pedestrian || '';
             const houseNumber = addr.house_number || '';
             const strasse = `${road} ${houseNumber}`.trim();
             
             const plz = addr.postcode || '';
-            const ort = addr.city || addr.town || addr.village || addr.municipality || '';
-            const stadtteil = addr.suburb || addr.quarter || addr.neighbourhood || addr.hamlet || '';
+            
+            // Gemeindefelder priorisieren: municipality/city/town hat Vorrang vor village/suburb
+            const ort = addr.municipality || addr.city || addr.town || addr.village || addr.suburb || '';
             
             let result = strasse;
             if (plz || ort) {
                 const plzOrt = `${plz} ${ort}`.trim();
                 result = result ? `${result}, ${plzOrt}` : plzOrt;
             }
-            if (stadtteil && stadtteil !== ort && !result.includes(stadtteil)) {
-                result += ` (${stadtteil})`;
-            }
+
             return result || (fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '');
         }
 
@@ -404,13 +401,13 @@
             
             const statuses = parties.map(p => p.status);
             
-            if (statuses.includes('erfolg')) return '#4caf50';
-            if (statuses.includes('termin')) return '#9c27b0';
-            if (statuses.includes('angebot')) return '#ffc107';
-            if (statuses.includes('nicht_da')) return '#f44336';
-            if (statuses.every(s => s === 'kein_interesse')) return '#424242';
+            if (statuses.includes('erfolg')) return '#4caf50'; // Grün
+            if (statuses.includes('termin')) return '#9c27b0'; // Violett
+            if (statuses.includes('angebot')) return '#ffc107'; // Gelb
+            if (statuses.includes('nicht_da')) return '#f44336'; // Rot
+            if (statuses.every(s => s === 'kein_interesse')) return '#424242'; // Dunkelgrau
             
-            return '#888888';
+            return '#888888'; // Grau (Offen)
         }
 
         function createBuildingIcon(partyCount, color) {
@@ -545,6 +542,7 @@
                             item.onclick = () => {
                                 const lat = parseFloat(place.lat);
                                 const lon = parseFloat(place.lon);
+
                                 const fullAddress = formatFullAddress(place.address, place.display_name);
 
                                 map.setView([lat, lon], 18);
@@ -588,22 +586,20 @@
         function renderParties() {
             const container = document.getElementById('partiesContainer');
             container.innerHTML = '';
-
-            if (activeBuildingIndex === null) return;
             const bld = buildings[activeBuildingIndex];
 
-            bld.parties.forEach((party, pIndex) => {
+            bld.parties.forEach((party, idx) => {
                 const card = document.createElement('div');
                 card.className = `party-card ${party.status || 'offen'}`;
 
                 card.innerHTML = `
                     <div class="party-row" style="justify-content: space-between; align-items: center;">
-                        <input type="text" placeholder="Etage / Lage (z.B. 1. OG links)" value="${party.floor || ''}" onchange="updateParty(${pIndex}, 'floor', this.value)" style="width: 60%;">
-                        <button class="btn-delete-party" onclick="deleteParty(${pIndex})" title="Partei löschen">🗑️</button>
+                        <input type="text" value="${party.floor || ''}" placeholder="Etage (z.B. EG, 1.OG re)" onchange="updateParty(${idx}, 'floor', this.value)" style="max-width: 140px;">
+                        <button class="btn-delete-party" onclick="deleteParty(${idx})" title="Partei entfernen">🗑️</button>
                     </div>
                     <div class="party-row">
-                        <input type="text" placeholder="Name des Bewohners" value="${party.name || ''}" onchange="updateParty(${pIndex}, 'name', this.value)">
-                        <select onchange="updateParty(${pIndex}, 'status', this.value)">
+                        <input type="text" value="${party.name || ''}" placeholder="Name des Bewohners" onchange="updateParty(${idx}, 'name', this.value)">
+                        <select onchange="updateParty(${idx}, 'status', this.value)">
                             <option value="offen" ${party.status === 'offen' ? 'selected' : ''}>Offen</option>
                             <option value="nicht_da" ${party.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
                             <option value="angebot" ${party.status === 'angebot' ? 'selected' : ''}>🟡 Angebot/Zähler</option>
@@ -613,18 +609,18 @@
                         </select>
                     </div>
                     <div class="party-row">
-                        <select onchange="updateParty(${pIndex}, 'sparte', this.value)">
+                        <select onchange="updateParty(${idx}, 'sparte', this.value)">
                             <option value="Strom" ${party.sparte === 'Strom' ? 'selected' : ''}>Strom</option>
                             <option value="Gas" ${party.sparte === 'Gas' ? 'selected' : ''}>Gas</option>
-                            <option value="Strom & Gas" ${party.sparte === 'Strom & Gas' ? 'selected' : ''}>Strom & Gas</option>
+                            <option value="Strom+Gas" ${party.sparte === 'Strom+Gas' ? 'selected' : ''}>Strom & Gas</option>
                         </select>
-                        <input type="text" placeholder="Aktueller Anbieter" value="${party.provider || ''}" onchange="updateParty(${pIndex}, 'provider', this.value)">
+                        <input type="text" value="${party.provider || ''}" placeholder="Aktueller Anbieter" onchange="updateParty(${idx}, 'provider', this.value)">
                     </div>
                     <div class="party-row">
-                        <input type="text" placeholder="Zählernummer / Verbrauch" value="${party.meterNo || ''}" onchange="updateParty(${pIndex}, 'meterNo', this.value)">
+                        <input type="text" value="${party.meterNo || ''}" placeholder="Zählernummer / Verbrauch" onchange="updateParty(${idx}, 'meterNo', this.value)">
                     </div>
                     <div class="party-row">
-                        <input type="text" placeholder="Notizen / Bemerkung" value="${party.note || ''}" onchange="updateParty(${pIndex}, 'note', this.value)">
+                        <input type="text" value="${party.note || ''}" placeholder="Notizen / Bemerkung" onchange="updateParty(${idx}, 'note', this.value)">
                     </div>
                 `;
                 container.appendChild(card);
@@ -639,6 +635,7 @@
                 status: 'offen',
                 sparte: 'Strom',
                 provider: '',
+                details: '',
                 meterNo: '',
                 note: ''
             });
@@ -660,20 +657,21 @@
         }
 
         function saveCurrentBuilding() {
-            if (activeBuildingIndex === null) return;
-            const addrInput = document.getElementById('buildingAddress').value;
-            buildings[activeBuildingIndex].address = addrInput;
-            saveStorage();
-            renderMarkers();
+            if (activeBuildingIndex !== null) {
+                buildings[activeBuildingIndex].address = document.getElementById('buildingAddress').value;
+                saveStorage();
+                renderMarkers();
+            }
             closeModal();
         }
 
         function deleteCurrentBuilding() {
-            if (activeBuildingIndex === null) return;
-            buildings.splice(activeBuildingIndex, 1);
-            saveStorage();
-            renderMarkers();
-            closeModal();
+            if (activeBuildingIndex !== null && confirm("Möchtest du dieses Gebäude mit allen Parteien wirklich löschen?")) {
+                buildings.splice(activeBuildingIndex, 1);
+                saveStorage();
+                renderMarkers();
+                closeModal();
+            }
         }
 
         function locateUser() {
@@ -682,20 +680,20 @@
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
                     map.setView([lat, lng], 18);
-                    L.marker([lat, lng]).addTo(map).bindPopup("Dein Standort").openPopup();
+                    L.circle([lat, lng], { radius: 10, color: '#ff9800' }).addTo(map);
                 }, () => {
-                    alert("Standort konnte nicht ermittelt werden.");
+                    alert("Standortzugriff nicht möglich.");
                 });
             } else {
-                alert("Geolocation wird von deinem Browser nicht unterstützt.");
+                alert("Geolocation wird von diesem Browser nicht unterstützt.");
             }
         }
 
         function saveToFile() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings));
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings, null, 2));
             const downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `d2d_backup_${new Date().toISOString().slice(0,10)}.json`);
+            downloadAnchor.setAttribute("download", `d2d_export_${new Date().toISOString().slice(0,10)}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
@@ -704,29 +702,41 @@
         function loadFromFile(event) {
             const file = event.target.files[0];
             if (!file) return;
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    buildings = JSON.parse(e.target.result);
-                    saveStorage();
-                    renderMarkers();
-                    alert("Daten erfolgreich geladen!");
+                    const importedBuildings = JSON.parse(e.target.result);
+                    if (Array.isArray(importedBuildings)) {
+                        buildings = importedBuildings;
+                        saveStorage();
+                        renderMarkers();
+                        alert("Daten erfolgreich geladen!");
+                    } else {
+                        alert("Ungültiges Dateiformat.");
+                    }
                 } catch (err) {
-                    alert("Fehler beim Lesen der Datei!");
+                    alert("Fehler beim Lesen der Datei.");
                 }
             };
             reader.readAsText(file);
         }
 
         function exportToCSV() {
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "Adresse;Etage;Name;Status;Sparte;Anbieter;Zaelernummer;Notiz\n";
+            if (buildings.length === 0) {
+                alert("Keine Daten zum Exportieren vorhanden.");
+                return;
+            }
 
-            buildings.forEach(b => {
-                const addr = `"${(b.address || '').replace(/"/g, '""')}"`;
-                (b.parties || []).forEach(p => {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "Adresse;Breitengrad;Längengrad;Etage;Bewohner;Status;Sparte;Anbieter;Zählernummer/Verbrauch;Notizen\n";
+
+            buildings.forEach(bld => {
+                bld.parties.forEach(p => {
                     const row = [
-                        addr,
+                        `"${(bld.address || '').replace(/"/g, '""')}"`,
+                        bld.lat,
+                        bld.lng,
                         `"${(p.floor || '').replace(/"/g, '""')}"`,
                         `"${(p.name || '').replace(/"/g, '""')}"`,
                         `"${(p.status || '').replace(/"/g, '""')}"`,
@@ -747,6 +757,9 @@
             link.click();
             link.remove();
         }
+
+        // Initiales Rendern beim Start
+        renderMarkers();
     </script>
 </body>
 </html>
