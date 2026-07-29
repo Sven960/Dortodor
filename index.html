@@ -349,7 +349,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             const swCode = `
-                const CACHE_NAME = 'd2d-energy-v7';
+                const CACHE_NAME = 'd2d-energy-v8';
                 const urlsToCache = [
                     './',
                     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -455,7 +455,7 @@
             </div>
 
             <div>
-                <label style="font-size: 11px; color: #aaa;">Adresse (Straße, Hausnummer, PLZ, Ort):</label>
+                <label style="font-size: 11px; color: #aaa;">Adresse (Straße, Hausnummer, Ortsteil, PLZ, Ort):</label>
                 <input type="text" id="buildingAddress" placeholder="Wird ermittelt...">
             </div>
 
@@ -511,12 +511,12 @@
                     else if (statuses.includes('kein_interesse')) color = '#424242';
                 }
 
-                // Pins auf 32x32 vergrößert für komfortables Antippen
+                // Pins minimal kleiner auf 24x24 Pixel angepasst
                 const markerIcon = L.divIcon({
                     className: 'custom-pin',
-                    html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,0.8);"></div>`,
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16]
+                    html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.7);"></div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
                 });
 
                 const marker = L.marker([b.lat, b.lng], { icon: markerIcon });
@@ -546,16 +546,22 @@
                 .then(data => {
                     if (data && data.address) {
                         const addr = data.address;
-                        // Gezielter Aufbau: Straße, Hausnummer, PLZ, Ort (keine Landkreise / Bundesländer)
-                        const street = addr.road || addr.pedestrian || addr.footway || addr.suburb || '';
+                        // Strukturierter Aufbau: Straße, Hausnummer, Ortsteil (z.B. Kuhschnappel), PLZ, Hauptort
+                        const street = addr.road || addr.pedestrian || addr.footway || '';
                         const houseNumber = addr.house_number || '';
+                        const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || '';
                         const postcode = addr.postcode || '';
-                        const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
+                        const city = addr.city || addr.town || addr.village || addr.municipality || '';
 
                         let parts = [];
                         let streetPart = [street, houseNumber].filter(Boolean).join(' ');
                         if (streetPart) parts.push(streetPart);
                         
+                        // Ortsteil separat einbinden, wenn vorhanden und unterschiedlich zum Hauptort
+                        if (suburb && suburb !== city) {
+                            parts.push(suburb);
+                        }
+
                         let cityPart = [postcode, city].filter(Boolean).join(' ');
                         if (cityPart) parts.push(cityPart);
 
