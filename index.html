@@ -575,4 +575,247 @@
             document.getElementById('buildingAddress').value = bld.address || '';
             renderParties(bld.parties);
 
-            document.getEle
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            activeBuildingIndex = null;
+        }
+
+        function renderParties(parties) {
+            const container = document.getElementById('partiesContainer');
+            container.innerHTML = '';
+
+            if (!parties || parties.length === 0) {
+                container.innerHTML = '<p style="color: #888; font-size: 12px;">Noch keine Parteien angelegt.</p>';
+                return;
+            }
+
+            parties.forEach((party, pIndex) => {
+                const card = document.createElement('div');
+                card.className = `party-card ${party.status || 'offen'}`;
+
+                card.innerHTML = `
+                    <div class="party-row" style="justify-content: space-between; align-items: center;">
+                        <input type="text" placeholder="Lage / Etage (z.B. 1. OG li)" value="${party.floor || ''}" onchange="updateParty(${pIndex}, 'floor', this.value)" style="flex: 1;">
+                        <button class="btn-delete-party" onclick="removeParty(${pIndex})">✕</button>
+                    </div>
+
+                    <div class="party-row">
+                        <input type="text" placeholder="Name an der Klingel" value="${party.name || ''}" onchange="updateParty(${pIndex}, 'name', this.value)">
+                    </div>
+
+                    <div class="party-row">
+                        <select onchange="updateParty(${pIndex}, 'status', this.value); this.closest('.party-card').className = 'party-card ' + this.value;">
+                            <option value="offen" ${party.status === 'offen' ? 'selected' : ''}>⚪ Offen</option>
+                            <option value="nicht_da" ${party.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
+                            <option value="angebot" ${party.status === 'angebot' ? 'selected' : ''}>🟡 Angebot / Zähler erfasst</option>
+                            <option value="erfolg" ${party.status === 'erfolg' ? 'selected' : ''}>🟢 Vertrag abgeschlossen</option>
+                            <option value="termin" ${party.status === 'termin' ? 'selected' : ''}>🟣 Wiedervorlage / Termin</option>
+                            <option value="kein_interesse" ${party.status === 'kein_interesse' ? 'selected' : ''}>⬛ Kein Interesse / Sperre</option>
+                        </select>
+                    </div>
+
+                    <div class="party-row">
+                        <select style="flex: 1;" onchange="updateParty(${pIndex}, 'sparte', this.value)">
+                            <option value="Strom" ${party.sparte === 'Strom' ? 'selected' : ''}>⚡ Strom</option>
+                            <option value="Gas" ${party.sparte === 'Gas' ? 'selected' : ''}>🔥 Gas</option>
+                            <option value="Kombi" ${party.sparte === 'Kombi' ? 'selected' : ''}>⚡+🔥 Kombi</option>
+                        </select>
+                        <select style="flex: 1.2;" onchange="updateParty(${pIndex}, 'provider', this.value)">
+                            <option value="Grundversorgung" ${party.provider === 'Grundversorgung' ? 'selected' : ''}>Grundversorgung</option>
+                            <option value="enviaM" ${party.provider === 'enviaM' ? 'selected' : ''}>enviaM</option>
+                            <option value="E.ON" ${party.provider === 'E.ON' ? 'selected' : ''}>E.ON</option>
+                            <option value="Sonstiges" ${party.provider === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                        </select>
+                    </div>
+
+                    <div class="party-row">
+                        <input type="text" placeholder="Verbrauch / Aktueller Preis (z.B. 3500 kWh / 38ct)" value="${party.details || ''}" onchange="updateParty(${pIndex}, 'details', this.value)">
+                    </div>
+
+                    <div class="party-row">
+                        <input type="text" placeholder="Zählernummer (optional)" value="${party.meterNo || ''}" onchange="updateParty(${pIndex}, 'meterNo', this.value)">
+                    </div>
+
+                    <div class="party-row">
+                        <input type="text" placeholder="Notiz (z.B. Termin Do 18 Uhr, Ansprechpartner...)" value="${party.note || ''}" onchange="updateParty(${pIndex}, 'note', this.value)">
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function addParty() {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.push({ 
+                floor: '', 
+                name: '', 
+                status: 'offen', 
+                sparte: 'Strom', 
+                provider: 'Grundversorgung', 
+                details: '', 
+                meterNo: '', 
+                note: '' 
+            });
+            renderParties(buildings[activeBuildingIndex].parties);
+        }
+
+        function updateParty(partyIndex, field, value) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties[partyIndex][field] = value;
+        }
+
+        function removeParty(partyIndex) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.splice(partyIndex, 1);
+            renderParties(buildings[activeBuildingIndex].parties);
+        }
+
+        function saveCurrentBuilding() {
+            if (activeBuildingIndex !== null) {
+                const addr = document.getElementById('buildingAddress').value;
+                buildings[activeBuildingIndex].address = addr;
+                saveStorage();
+                renderMarkers();
+            }
+            closeModal();
+        }
+
+        function deleteCurrentBuilding() {
+            if (activeBuildingIndex !== null && confirm("Möchtest du diesen Eingang mit allen Parteien löschen?")) {
+                buildings.splice(activeBuildingIndex, 1);
+                saveStorage();
+                renderMarkers();
+                closeModal();
+            }
+        }
+
+        function saveToFile() {
+            if (buildings.length === 0) {
+                alert("Keine Daten vorhanden!");
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `D2D_Energie_Backup_${today}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function loadFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (Array.isArray(loadedData)) {
+                        if (confirm("Sicherung laden? Aktuelle Daten auf der Karte werden ersetzt.")) {
+                            buildings = loadedData;
+                            saveStorage();
+                            renderMarkers();
+                            alert("Erfolgreich geladen!");
+                        }
+                    } else {
+                        alert("Ungültiges Format.");
+                    }
+                } catch (err) {
+                    alert("Fehler beim Lesen der Datei.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportToCSV() {
+            if (buildings.length === 0) {
+                alert("Keine Daten zum Exportieren!");
+                return;
+            }
+
+            let csvContent = "\uFEFF";
+            csvContent += "Adresse;Etage;Name;Status;Sparte;Anbieter;Verbrauch_Preis;Zaehlernummer;Notiz;Lat;Lng\n";
+
+            const statusMap = {
+                'offen': 'Offen',
+                'nicht_da': 'Nicht da',
+                'angebot': 'Angebot / Zaehler erfasst',
+                'erfolg': 'Vertrag abgeschlossen',
+                'termin': 'Wiedervorlage / Termin',
+                'kein_interesse': 'Kein Interesse / Sperre'
+            };
+
+            buildings.forEach(bld => {
+                const addr = `"${(bld.address || 'Unbenannt').replace(/"/g, '""')}"`;
+                const lat = bld.lat;
+                const lng = bld.lng;
+
+                if (bld.parties && bld.parties.length > 0) {
+                    bld.parties.forEach(party => {
+                        const floor = `"${(party.floor || '').replace(/"/g, '""')}"`;
+                        const name = `"${(party.name || '').replace(/"/g, '""')}"`;
+                        const status = `"${statusMap[party.status] || party.status}"`;
+                        const sparte = `"${party.sparte || ''}"`;
+                        const provider = `"${party.provider || ''}"`;
+                        const details = `"${(party.details || '').replace(/"/g, '""')}"`;
+                        const meterNo = `"${(party.meterNo || '').replace(/"/g, '""')}"`;
+                        const note = `"${(party.note || '').replace(/"/g, '""')}"`;
+
+                        csvContent += `${addr};${floor};${name};${status};${sparte};${provider};${details};${meterNo};${note};${lat};${lng}\n`;
+                    });
+                } else {
+                    csvContent += `${addr};"";"";"Keine Parteien";"";"";"";"";"";${lat};${lng}\n`;
+                }
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const today = new Date().toISOString().slice(0, 10);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `D2D_Energie_Export_${today}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Standortabfrage mit Absicherung
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        map.setView([lat, lng], 18);
+
+                        L.circle([lat, lng], {
+                            color: '#2196F3',
+                            fillColor: '#2196F3',
+                            fillOpacity: 0.3,
+                            radius: 10
+                        }).addTo(map);
+                    }, 
+                    error => {
+                        console.warn("GPS-Zugriff nicht erlaubt oder fehlgeschlagen:", error.message);
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            }
+        }
+
+        // Starten & Render-Größe erzwingen
+        renderMarkers();
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 200);
+    </script>
+</body>
+</html>
