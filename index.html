@@ -349,7 +349,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             const swCode = `
-                const CACHE_NAME = 'd2d-energy-v6';
+                const CACHE_NAME = 'd2d-energy-v7';
                 const urlsToCache = [
                     './',
                     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -455,7 +455,7 @@
             </div>
 
             <div>
-                <label style="font-size: 11px; color: #aaa;">Adresse / Hausnummer / Ort:</label>
+                <label style="font-size: 11px; color: #aaa;">Adresse (Straße, Hausnummer, PLZ, Ort):</label>
                 <input type="text" id="buildingAddress" placeholder="Wird ermittelt...">
             </div>
 
@@ -511,11 +511,12 @@
                     else if (statuses.includes('kein_interesse')) color = '#424242';
                 }
 
+                // Pins auf 32x32 vergrößert für komfortables Antippen
                 const markerIcon = L.divIcon({
                     className: 'custom-pin',
-                    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>`,
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
+                    html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,0.8);"></div>`,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
                 });
 
                 const marker = L.marker([b.lat, b.lng], { icon: markerIcon });
@@ -528,7 +529,7 @@
             const newBuilding = {
                 lat: e.latlng.lat,
                 lng: e.latlng.lng,
-                address: 'Unbekannte Adresse',
+                address: 'Wird ermittelt...',
                 parties: [
                     { name: 'EG', bell: '', status: 'offen', energy: 'strom', provider: 'Grundversorgung', consumption: '', pricePerKwh: '', meterNo: '', note: '' }
                 ]
@@ -540,17 +541,40 @@
         });
 
         function fetchAddress(lat, lng, index) {
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`)
                 .then(res => res.json())
                 .then(data => {
-                    if (data && data.display_name) {
-                        buildings[index].address = data.display_name;
+                    if (data && data.address) {
+                        const addr = data.address;
+                        // Gezielter Aufbau: Straße, Hausnummer, PLZ, Ort (keine Landkreise / Bundesländer)
+                        const street = addr.road || addr.pedestrian || addr.footway || addr.suburb || '';
+                        const houseNumber = addr.house_number || '';
+                        const postcode = addr.postcode || '';
+                        const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
+
+                        let parts = [];
+                        let streetPart = [street, houseNumber].filter(Boolean).join(' ');
+                        if (streetPart) parts.push(streetPart);
+                        
+                        let cityPart = [postcode, city].filter(Boolean).join(' ');
+                        if (cityPart) parts.push(cityPart);
+
+                        const cleanAddress = parts.length > 0 ? parts.join(', ') : data.display_name;
+
+                        buildings[index].address = cleanAddress;
                         if (activeBuildingIndex === index) {
-                            document.getElementById('buildingAddress').value = data.display_name;
+                            document.getElementById('buildingAddress').value = cleanAddress;
                         }
                         saveStorage();
                     }
-                }).catch(err => console.log('Geocoding error:', err));
+                }).catch(err => {
+                    console.log('Geocoding error:', err);
+                    buildings[index].address = 'Unbekannte Adresse';
+                    if (activeBuildingIndex === index) {
+                        document.getElementById('buildingAddress').value = 'Unbekannte Adresse';
+                    }
+                    saveStorage();
+                });
         }
 
         function openModal(index) {
