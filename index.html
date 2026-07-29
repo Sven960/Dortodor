@@ -461,20 +461,29 @@
                 return cleanedName.replace(/Kuhschnappel/gi, 'Sankt Egidien');
             }
             
-            const road = addr.road || addr.pedestrian || addr.suburb || addr.footway || '';
+            const road = addr.road || addr.pedestrian || addr.footway || '';
             const houseNumber = addr.house_number || '';
             const strasse = `${road} ${houseNumber}`.trim();
             
             const plz = addr.postcode || '';
             let ort = addr.city || addr.town || addr.village || addr.municipality || '';
 
+            // Ortsteil-Ermittlung (z. B. Suburb, Quarter, Neighbourhood)
+            const suburb = addr.suburb || addr.quarter || addr.neighbourhood || addr.city_district || '';
+
             if (ort.toLowerCase() === 'kuhschnappel') {
                 ort = 'Sankt Egidien';
             }
             
+            // Wenn Ortsteil vorhanden ist und sich vom Hauptort unterscheidet, anhängen
+            let ortMitTeil = ort;
+            if (suburb && suburb.toLowerCase() !== ort.toLowerCase()) {
+                ortMitTeil = `${ort} (${suburb})`;
+            }
+
             let result = strasse;
-            if (plz || ort) {
-                const plzOrt = `${plz} ${ort}`.trim();
+            if (plz || ortMitTeil) {
+                const plzOrt = `${plz} ${ortMitTeil}`.trim();
                 result = result ? `${result}, ${plzOrt}` : plzOrt;
             }
 
