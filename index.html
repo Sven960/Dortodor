@@ -351,6 +351,75 @@
 </head>
 <body>
 
+    <!-- Service Worker Registrierung -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'd2d-energy-v2';
+                const urlsToCache = [
+                    './',
+                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                ];
+
+                self.addEventListener('install', event => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME).then(cache => {
+                            return cache.addAll(urlsToCache).catch(err => console.log('Cache add error:', err));
+                        })
+                    );
+                    self.skipWaiting();
+                });
+
+                self.addEventListener('activate', event => {
+                    event.waitUntil(
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    if (cacheName !== CACHE_NAME) {
+                                        return caches.delete(cacheName);
+                                    }
+                                })
+                            );
+                        })
+                    );
+                    self.clients.claim();
+                });
+
+                self.addEventListener('fetch', event => {
+                    event.respondWith(
+                        caches.match(event.request).then(response => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request).then(networkResponse => {
+                                if (!event.request.url.includes('chrome-extension')) {
+                                    return caches.open(CACHE_NAME).then(cache => {
+                                        cache.put(event.request, networkResponse.clone());
+                                        return networkResponse;
+                                    });
+                                }
+                                return networkResponse;
+                            }).catch(() => {
+                                return new Response('Offline-Modus aktiv');
+                            });
+                        })
+                    );
+                });
+            `;
+            
+            const blob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swUrl)
+                    .then(reg => console.log('Service Worker erfolgreich registriert:', reg.scope))
+                    .catch(err => console.log('Service Worker Registrierung fehlgeschlagen:', err));
+            });
+        }
+    </script>
+
     <div id="map"></div>
 
     <!-- Filter-Bar -->
@@ -423,6 +492,7 @@
         let activeBuildingIndex = null;
         let activeFilter = 'alle';
         let markersGroup = L.layerGroup().addTo(map);
+        let searchDebounceTimeout = null;
 
         function saveStorage() {
             localStorage.setItem('d2d_energy_buildings', JSON.stringify(buildings));
@@ -432,76 +502,4 @@
         function renderMarkers() {
             markersGroup.clearLayers();
             buildings.forEach((b, index) => {
-                if (activeFilter !== 'alle') {
-                    const matches = b.parties && b.parties.some(p => p.status === activeFilter);
-                    if (!matches) return;
-                }
-
-                let color = '#888888';
-                if (b.parties && b.parties.length > 0) {
-                    const statuses = b.parties.map(p => p.status);
-                    if (statuses.includes('erfolg')) color = '#4caf50';
-                    else if (statuses.includes('termin')) color = '#9c27b0';
-                    else if (statuses.includes('angebot')) color = '#ffc107';
-                    else if (statuses.includes('nicht_da')) color = '#f44336';
-                    else if (statuses.includes('kein_interesse')) color = '#424242';
-                }
-
-                const markerIcon = L.divIcon({
-                    className: 'custom-pin',
-                    html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>`,
-                    iconSize: [14, 14],
-                    iconAnchor: [7, 7]
-                });
-
-                const marker = L.marker([b.lat, b.lng], { icon: markerIcon });
-                marker.on('click', () => openModal(index));
-                markersGroup.addLayer(marker);
-            });
-        }
-
-        map.on('click', (e) => {
-            const newBuilding = {
-                lat: e.latlng.lat,
-                lng: e.latlng.lng,
-                address: 'Unbekannte Adresse',
-                parties: [
-                    { name: 'Partei 1', status: 'offen', energy: 'strom', kwh: '', price: '' }
-                ]
-            };
-            buildings.push(newBuilding);
-            saveStorage();
-            openModal(buildings.length - 1);
-            fetchAddress(e.latlng.lat, e.latlng.lng, buildings.length - 1);
-        });
-
-        function fetchAddress(lat, lng, index) {
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.display_name) {
-                        buildings[index].address = data.display_name;
-                        if (activeBuildingIndex === index) {
-                            document.getElementById('buildingAddress').value = data.display_name;
-                        }
-                        saveStorage();
-                    }
-                }).catch(err => console.log('Geocoding error:', err));
-        }
-
-        function openModal(index) {
-            activeBuildingIndex = index;
-            const b = buildings[index];
-            document.getElementById('buildingAddress').value = b.address || '';
-            renderParties();
-            document.getElementById('modalOverlay').style.display = 'flex';
-        }
-
-        function closeModal() {
-            document.getElementById('modalOverlay').style.display = 'none';
-            activeBuildingIndex = null;
-            saveStorage();
-        }
-
-        function renderParties() {
-            c
+                if (activeF
