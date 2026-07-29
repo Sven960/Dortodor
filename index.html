@@ -349,7 +349,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             const swCode = `
-                const CACHE_NAME = 'd2d-energy-v8';
+                const CACHE_NAME = 'd2d-energy-v9';
                 const urlsToCache = [
                     './',
                     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -511,12 +511,14 @@
                     else if (statuses.includes('kein_interesse')) color = '#424242';
                 }
 
-                // Pins minimal kleiner auf 24x24 Pixel angepasst
+                const partyCount = b.parties ? b.parties.length : 0;
+
+                // Pin kompakter auf 18x18 Pixel mit zentriertem Anker (9x9) und Partei-Anzahl als Text
                 const markerIcon = L.divIcon({
                     className: 'custom-pin',
-                    html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 0 5px rgba(0,0,0,0.7);"></div>`,
-                    iconSize: [24, 24],
-                    iconAnchor: [12, 12]
+                    html: `<div style="background-color: ${color}; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; color: #fff; text-shadow: 0 0 2px #000;">${partyCount}</div>`,
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
                 });
 
                 const marker = L.marker([b.lat, b.lng], { icon: markerIcon });
@@ -546,12 +548,19 @@
                 .then(data => {
                     if (data && data.address) {
                         const addr = data.address;
-                        // Strukturierter Aufbau: Straße, Hausnummer, Ortsteil (z.B. Kuhschnappel), PLZ, Hauptort
                         const street = addr.road || addr.pedestrian || addr.footway || '';
                         const houseNumber = addr.house_number || '';
-                        const suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || '';
+                        let suburb = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || '';
                         const postcode = addr.postcode || '';
                         const city = addr.city || addr.town || addr.village || addr.municipality || '';
+
+                        // Korrektur-Logik für Straßen, die im Hauptort liegen (z.B. Schulstraße in St. Egidien),
+                        // damit OSM-Fehlzuordnungen (die fälschlicherweise Kuhschnappel als Suburb melden) korrigiert werden.
+                        const mainTownStreets = ['schulstraße', 'bahnhofstraße', 'hauptstraße', 'kirchstraße', 'mühlstraße'];
+                        const isMainTownStreet = mainTownStreets.some(s => street.toLowerCase().includes(s));
+                        if (isMainTownStreet && suburb.toLowerCase().includes('kuhschnappel')) {
+                            suburb = ''; // Unterdrückt die falsche Ortsteil-Zuweisung für Hauptort-Straßen
+                        }
 
                         let parts = [];
                         let streetPart = [street, houseNumber].filter(Boolean).join(' ');
