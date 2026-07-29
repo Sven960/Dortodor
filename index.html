@@ -502,4 +502,344 @@
                 className: 'custom-building-pin',
                 html: `
                     <div style="
-                        background-color: 
+                        background-color: ${color}; 
+                        color: ${color === '#ffc107' ? '#000' : '#fff'}; 
+                        font-weight: bold; 
+                        font-size: 11px;
+                        width: 26px; 
+                        height: 26px; 
+                        border-radius: 50%; 
+                        border: 2px solid white; 
+                        display: flex; 
+                        align-items: center; 
+                        justify-content: center;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.6);">
+                        ${partyCount}
+                    </div>`,
+                iconSize: [26, 26],
+                iconAnchor: [13, 13]
+            });
+        }
+
+        function renderMarkers() {
+            markersGroup.clearLayers();
+
+            buildings.forEach((bld, index) => {
+                const parties = bld.parties || [];
+                
+                if (activeFilter !== 'alle') {
+                    const hasMatchingStatus = parties.some(p => p.status === activeFilter);
+                    if (!hasMatchingStatus) return;
+                }
+
+                const count = parties.length;
+                const pinColor = getBuildingColor(parties);
+                const marker = L.marker([bld.lat, bld.lng], { icon: createBuildingIcon(count, pinColor) });
+
+                marker.on('click', () => {
+                    openModal(index);
+                });
+
+                markersGroup.addLayer(marker);
+            });
+        }
+
+        function setFilter(filterType, btnElement) {
+            activeFilter = filterType;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+            renderMarkers();
+        }
+
+        async function createNewBuildingAt(lat, lng, defaultAddress = '') {
+            const newBuilding = {
+                lat: lat,
+                lng: lng,
+                address: defaultAddress || 'Adresse wird geladen...',
+                parties: [
+                    { 
+                        floor: 'EG', 
+                        name: '', 
+                        status: 'offen', 
+                        sparte: 'Strom', 
+                        provider: 'Grundversorgung', 
+                        details: '', 
+                        meterNo: '', 
+                        note: '' 
+                    }
+                ]
+            };
+
+            buildings.push(newBuilding);
+            const newIndex = buildings.length - 1;
+            saveStorage();
+            renderMarkers();
+            openModal(newIndex);
+
+            if (!defaultAddress) {
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                    const data = await response.json();
+
+                    if (data && data.address) {
+                        const fetchedAddress = await formatFullAddressPrecise(lat, lng, data.address, data.display_name);
+                        buildings[newIndex].address = fetchedAddress;
+                        document.getElementById('buildingAddress').value = fetchedAddress;
+                        saveStorage();
+                    } else {
+                        buildings[newIndex].address = '';
+                        document.getElementById('buildingAddress').value = '';
+                    }
+                } catch (error) {
+                    console.error("Fehler bei Adressermittlung:", error);
+                    buildings[newIndex].address = '';
+                    document.getElementById('buildingAddress').value = '';
+                }
+            }
+        }
+
+        map.on('click', function(e) {
+            createNewBuildingAt(e.latlng.lat, e.latlng.lng);
+        });
+
+        /* ==========================================
+           SUCHFUNKTION (NOMINATIM GEOCODING)
+           ========================================== */
+        function handleSearchInput(query) {
+            clearTimeout(searchDebounceTimeout);
+            const resultsDiv = document.getElementById('searchResults');
+
+            if (!query || query.trim().length < 3) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+
+            searchDebounceTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&countrycodes=de`);
+                    const results = await response.json();
+
+                    resultsDiv.innerHTML = '';
+
+                    if (results.length === 0) {
+                        resultsDiv.innerHTML = '<div class="search-item" style="color: #888;">Keine Adresse gefunden</div>';
+                    } else {
+                        results.forEach(place => {
+                            const item = document.createElement('div');
+                            item.className = 'search-item';
+                            item.innerText = filterOutSuburbs(place.display_name);
+
+                            item.onclick = () => {
+                                const lat = parseFloat(place.lat);
+                                const lon = parseFloat(place.lon);
+
+                                map.setView([lat, lon], 18);
+                                resultsDiv.style.display = 'none';
+                                document.getElementById('searchInput').value = '';
+                            };
+                            resultsDiv.appendChild(item);
+                        });
+                    }
+                    resultsDiv.style.display = 'block';
+                } catch (err) {
+                    console.error("Fehler bei der Adresssuche:", err);
+                }
+            }, 400);
+        }
+
+        /* ==========================================
+           MODAL MANAGEMENT & PARTEIEN
+           ========================================== */
+        function openModal(index) {
+            activeBuildingIndex = index;
+            const bld = buildings[index];
+
+            document.getElementById('buildingAddress').value = bld.address || '';
+            renderParties();
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            activeBuildingIndex = null;
+        }
+
+        function renderParties() {
+            const container = document.getElementById('partiesContainer');
+            container.innerHTML = '';
+
+            if (activeBuildingIndex === null) return;
+
+            const parties = buildings[activeBuildingIndex].parties || [];
+
+            parties.forEach((p, pIndex) => {
+                const card = document.createElement('div');
+                card.className = `party-card ${p.status || 'offen'}`;
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:11px; font-weight:bold; color:#aaa;">Partei #${pIndex + 1}</span>
+                        <button class="btn-delete-party" onclick="deleteParty(${pIndex})">✕</button>
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Etage (z.B. EG, 1.OG)" value="${p.floor || ''}" onchange="updatePartyField(${pIndex}, 'floor', this.value)">
+                        <input type="text" placeholder="Name / Klingel" value="${p.name || ''}" onchange="updatePartyField(${pIndex}, 'name', this.value)">
+                    </div>
+                    <div class="party-row">
+                        <select onchange="updatePartyField(${pIndex}, 'status', this.value)">
+                            <option value="offen" ${p.status === 'offen' ? 'selected' : ''}>Offen</option>
+                            <option value="nicht_da" ${p.status === 'nicht_da' ? 'selected' : ''}>🔴 Nicht da</option>
+                            <option value="angebot" ${p.status === 'angebot' ? 'selected' : ''}>🟡 Angebot/Zähler</option>
+                            <option value="termin" ${p.status === 'termin' ? 'selected' : ''}>🟣 Termin</option>
+                            <option value="erfolg" ${p.status === 'erfolg' ? 'selected' : ''}>🟢 Erfolg</option>
+                            <option value="kein_interesse" ${p.status === 'kein_interesse' ? 'selected' : ''}>⚫ Kein Interesse</option>
+                        </select>
+                        <select onchange="updatePartyField(${pIndex}, 'sparte', this.value)">
+                            <option value="Strom" ${p.sparte === 'Strom' ? 'selected' : ''}>Strom</option>
+                            <option value="Gas" ${p.sparte === 'Gas' ? 'selected' : ''}>Gas</option>
+                            <option value="Beides" ${p.sparte === 'Beides' ? 'selected' : ''}>Beides</option>
+                        </select>
+                    </div>
+                    <div class="party-row">
+                        <input type="text" placeholder="Aktueller Anbieter" value="${p.provider || ''}" onchange="updatePartyField(${pIndex}, 'provider', this.value)">
+                        <input type="text" placeholder="Zählernummer" value="${p.meterNo || ''}" onchange="updatePartyField(${pIndex}, 'meterNo', this.value)">
+                    </div>
+                    <input type="text" placeholder="Notizen / Details..." value="${p.note || ''}" onchange="updatePartyField(${pIndex}, 'note', this.value)">
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function addParty() {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.push({
+                floor: '',
+                name: '',
+                status: 'offen',
+                sparte: 'Strom',
+                provider: '',
+                meterNo: '',
+                note: ''
+            });
+            renderParties();
+        }
+
+        function updatePartyField(pIndex, field, value) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties[pIndex][field] = value;
+            renderParties();
+        }
+
+        function deleteParty(pIndex) {
+            if (activeBuildingIndex === null) return;
+            buildings[activeBuildingIndex].parties.splice(pIndex, 1);
+            renderParties();
+        }
+
+        function saveCurrentBuilding() {
+            if (activeBuildingIndex !== null) {
+                buildings[activeBuildingIndex].address = document.getElementById('buildingAddress').value;
+                saveStorage();
+                renderMarkers();
+            }
+            closeModal();
+        }
+
+        function deleteCurrentBuilding() {
+            if (activeBuildingIndex !== null && confirm("Möchtest du dieses Gebäude mit allen Parteien wirklich löschen?")) {
+                buildings.splice(activeBuildingIndex, 1);
+                saveStorage();
+                renderMarkers();
+                closeModal();
+            }
+        }
+
+        /* ==========================================
+           GPS-ORTUNG
+           ========================================== */
+        function locateUser() {
+            if (!navigator.geolocation) {
+                alert("GPS-Ortung wird von deinem Browser nicht unterstützt.");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    map.setView([lat, lng], 18);
+
+                    L.circleMarker([lat, lng], {
+                        radius: 8,
+                        color: '#ffffff',
+                        fillColor: '#2196F3',
+                        fillOpacity: 1,
+                        weight: 3
+                    }).addTo(map).bindPopup("Dein Standort").openPopup();
+                },
+                (err) => {
+                    alert("Standort konnte nicht ermittelt werden: " + err.message);
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        /* ==========================================
+           BACKUP & EXPORT (JSON & CSV EXCEL)
+           ========================================== */
+        function saveToFile() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(buildings, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `d2d_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function loadFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedBuildings = JSON.parse(e.target.result);
+                    if (Array.isArray(importedBuildings)) {
+                        buildings = importedBuildings;
+                        saveStorage();
+                        renderMarkers();
+                        alert("Daten erfolgreich geladen!");
+                    }
+                } catch (err) {
+                    alert("Fehler beim Lesen der Backup-Datei.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportToCSV() {
+            let csv = "\uFEFF"; // UTF-8 BOM für Excel
+            csv += "Adresse;Breitengrad;Längengrad;Etage;Name;Status;Sparte;Anbieter;Zählernummer;Notizen\n";
+
+            buildings.forEach(b => {
+                const addr = (b.address || '').replace(/;/g, ',');
+                (b.parties || []).forEach(p => {
+                    csv += `"${addr}";${b.lat};${b.lng};"${p.floor || ''}";"${p.name || ''}";"${p.status || ''}";"${p.sparte || ''}";"${p.provider || ''}";"${p.meterNo || ''}";"${p.note || ''}"\n`;
+                });
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `d2d_export_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initiale Darstellung beim Aufruf
+        renderMarkers();
+    </script>
+</body>
+</html>
