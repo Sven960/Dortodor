@@ -349,7 +349,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             const swCode = `
-                const CACHE_NAME = 'd2d-energy-v5';
+                const CACHE_NAME = 'd2d-energy-v6';
                 const urlsToCache = [
                     './',
                     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -513,9 +513,9 @@
 
                 const markerIcon = L.divIcon({
                     className: 'custom-pin',
-                    html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>`,
-                    iconSize: [14, 14],
-                    iconAnchor: [7, 7]
+                    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.6);"></div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
                 });
 
                 const marker = L.marker([b.lat, b.lng], { icon: markerIcon });
