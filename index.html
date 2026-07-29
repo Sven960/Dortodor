@@ -40,16 +40,13 @@
             display: flex;
             gap: 10px;
         }
-        input, select, button {
+        input, button {
             padding: 10px;
             font-size: 1rem;
             border: 1px solid #ccc;
             border-radius: 4px;
         }
         input {
-            flex: 2;
-        }
-        select {
             flex: 1;
         }
         button {
@@ -58,6 +55,8 @@
             border: none;
             cursor: pointer;
             font-weight: bold;
+            padding-left: 20px;
+            padding-right: 20px;
         }
         button:hover {
             background-color: #004494;
@@ -78,11 +77,6 @@
         <div class="address-hint">Automatische Adresssuche: Straße, Hausnummer und Ort eingeben</div>
         <div class="input-group">
             <input type="text" id="addressInput" placeholder="z.B. Schulstr. 39, St. Egidien">
-            <select id="statusSelect">
-                <option value="Grundversorgung">Grundversorgung</option>
-                <option value="Wettbewerb">Wettbewerb</option>
-                <option value="Sondervertrag">Sondervertrag</option>
-            </select>
             <button id="saveBtn">Speichern</button>
         </div>
     </div>
@@ -110,16 +104,15 @@
         let markers = [];
 
         // Funktion zum Hinzufügen von Markern auf der Karte
-        function addMarker(lat, lng, addressText, status) {
+        function addMarker(lat, lng, addressText) {
             const marker = L.marker([lat, lng], { icon: customPinIcon }).addTo(map);
-            marker.bindPopup(`<b>Adresse:</b> ${addressText}<br><b>Kategorie:</b> ${status}`);
+            marker.bindPopup(`<b>Adresse:</b> ${addressText}`);
             markers.push(marker);
         }
 
         // Event für den Speichern-Button mit Nominatim Geocoding (Straße, Hausnummer, Ort)
         document.getElementById('saveBtn').addEventListener('click', function() {
             const address = document.getElementById('addressInput').value;
-            const status = document.getElementById('statusSelect').value;
 
             if (!address) {
                 alert('Bitte geben Sie eine Adresse ein.');
@@ -136,7 +129,7 @@
                         const lon = parseFloat(data[0].lon);
                         const displayName = data[0].display_name;
 
-                        addMarker(lat, lon, displayName, status);
+                        addMarker(lat, lon, displayName);
                         map.setView([lat, lon], 16);
                         document.getElementById('addressInput').value = '';
                     } else {
