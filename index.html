@@ -30,17 +30,17 @@
             z-index: 1;
         }
 
-        /* Leaflet Zoom-Control sichtbar halten */
+        /* Leaflet Zoom-Control */
         .leaflet-top.leaflet-left {
             top: 10px;
             left: 10px;
         }
 
-        /* Kompakte Filter-Bar oben links (rechts neben den Zoom-Buttons platziert) */
+        /* Filter-Bar oben links */
         .filter-bar {
             position: absolute;
             top: 12px;
-            left: 60px; /* Versatz nach rechts, damit + / - frei bleiben */
+            left: 60px;
             z-index: 1000;
             display: flex;
             gap: 4px;
@@ -56,7 +56,6 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        /* Scrollbar für Filter auf Mobilgeräten ausblenden */
         .filter-bar::-webkit-scrollbar {
             display: none;
         }
@@ -79,7 +78,7 @@
             color: #000;
         }
 
-        /* Rechte Steuerungs-Spalte */
+        /* Steuerungs-Spalte rechts */
         .right-controls {
             position: absolute;
             top: 52px;
@@ -240,7 +239,6 @@
             cursor: pointer;
         }
 
-        /* Parteien-Karten Styling */
         .party-card {
             background: #262626;
             border-radius: 10px;
@@ -261,6 +259,41 @@
         .party-row {
             display: flex;
             gap: 6px;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            background: #181818;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 0 8px;
+            flex: 1;
+        }
+
+        .input-group:focus-within {
+            border-color: #ff9800;
+        }
+
+        .input-group input {
+            border: none;
+            background: transparent;
+            padding: 6px 0;
+            width: 100%;
+        }
+
+        .input-group input:focus {
+            border-color: transparent;
+            outline: none;
+        }
+
+        .input-group .unit-label {
+            font-size: 10px;
+            color: #ff9800;
+            font-weight: bold;
+            padding-left: 4px;
+            white-space: nowrap;
+            user-select: none;
         }
 
         input, select {
@@ -298,7 +331,6 @@
 
     <div id="map"></div>
 
-    <!-- Kompakte Filter-Bar oben links (neben den Zoom-Buttons) -->
     <div class="filter-bar">
         <button class="filter-btn active" onclick="setFilter('alle', this)">Alle</button>
         <button class="filter-btn" onclick="setFilter('nicht_da', this)">🔴 Nicht da</button>
@@ -307,7 +339,6 @@
         <button class="filter-btn" onclick="setFilter('erfolg', this)">🟢 Erfolge</button>
     </div>
 
-    <!-- Rechte Steuerungs-Spalte -->
     <div class="right-controls">
         <div class="top-bar">
             <button class="action-btn save" onclick="saveToFile()">💾 Sichern</button>
@@ -328,11 +359,10 @@
 
     <button class="gps-btn" onclick="locateUser()">🎯</button>
 
-    <!-- Modal für Mehrfamilienhaus / Parteien -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal-container">
             <div class="modal-header">
-                <h2 id="modalTitle">Gebäude & Energieversorgungen</h2>
+                <h2 id="modalTitle">Gebäude & Kunden</h2>
                 <button class="close-btn" onclick="closeModal()">✕</button>
             </div>
 
@@ -353,60 +383,9 @@
         </div>
     </div>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Service Worker registrieren für Offline-Nutzung
-        if ('serviceWorker' in navigator) {
-            const swCode = `
-                const CACHE_NAME = 'd2d-tracker-v1';
-                const urlsToCache = [
-                    './',
-                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-                    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-                    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-                    'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
-                ];
-
-                self.addEventListener('install', event => {
-                    event.waitUntil(
-                        caches.open(CACHE_NAME)
-                            .then(cache => cache.addAll(urlsToCache))
-                    );
-                });
-
-                self.addEventListener('fetch', event => {
-                    event.respondWith(
-                        caches.match(event.request)
-                            .then(response => {
-                                if (response) {
-                                    return response; // Aus Cache liefern wenn vorhanden
-                                }
-                                return fetch(event.request).then(networkResponse => {
-                                    // Dynamisches Caching für gesehene Map-Kacheln
-                                    if (event.request.url.includes('tile.openstreetmap.org')) {
-                                        let responseClone = networkResponse.clone();
-                                        caches.open(CACHE_NAME).then(cache => {
-                                            cache.put(event.request, responseClone);
-                                        });
-                                    }
-                                    return networkResponse;
-                                }).catch(() => {
-                                    // Fallback falls offline und Kachel nicht im Cache
-                                    return new Response('Offline Kachel nicht verfügbar', {status: 404, statusText: 'Offline'});
-                                });
-                            })
-                    );
-                });
-            `;
-            const blob = new Blob([swCode], {type: 'application/javascript'});
-            const swUrl = URL.createObjectURL(blob);
-            navigator.serviceWorker.register(swUrl)
-                .then(() => console.log("Service Worker erfolgreich registriert."))
-                .catch(err => console.log("Service Worker Registrierung fehlgeschlagen:", err));
-        }
-
         const map = L.map('map').setView([50.833, 12.600], 15);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -424,27 +403,31 @@
             localStorage.setItem('d2d_energy_buildings', JSON.stringify(buildings));
         }
 
-        // Hilfsfunktion zur Formatierung der vollständigen Adresse mit PLZ und Ort
         function formatFullAddress(addr, fallbackDisplayName = '') {
-            if (!addr) return fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '';
+            if (!addr) {
+                if (!fallbackDisplayName) return 'Adresse unbekannt';
+                let cleanedName = fallbackDisplayName.split(',')[0];
+                return cleanedName.replace(/Kuhschnappel/gi, 'Sankt Egidien');
+            }
             
-            const road = addr.road || addr.pedestrian || addr.suburb || '';
+            const road = addr.road || addr.pedestrian || addr.suburb || addr.footway || '';
             const houseNumber = addr.house_number || '';
             const strasse = `${road} ${houseNumber}`.trim();
             
             const plz = addr.postcode || '';
-            const ort = addr.city || addr.town || addr.village || addr.municipality || '';
-            const stadtteil = addr.suburb || addr.quarter || addr.neighbourhood || addr.hamlet || '';
+            let ort = addr.city || addr.town || addr.village || addr.municipality || '';
+
+            if (ort.toLowerCase() === 'kuhschnappel') {
+                ort = 'Sankt Egidien';
+            }
             
             let result = strasse;
             if (plz || ort) {
                 const plzOrt = `${plz} ${ort}`.trim();
                 result = result ? `${result}, ${plzOrt}` : plzOrt;
             }
-            if (stadtteil && stadtteil !== ort && !result.includes(stadtteil)) {
-                result += ` (${stadtteil})`;
-            }
-            return result || (fallbackDisplayName ? fallbackDisplayName.split(',')[0] : '');
+
+            return result.replace(/Kuhschnappel/gi, 'Sankt Egidien');
         }
 
         function getBuildingColor(parties) {
@@ -452,13 +435,13 @@
             
             const statuses = parties.map(p => p.status);
             
-            if (statuses.includes('erfolg')) return '#4caf50'; // Grün
-            if (statuses.includes('termin')) return '#9c27b0'; // Violett
-            if (statuses.includes('angebot')) return '#ffc107'; // Gelb
-            if (statuses.includes('nicht_da')) return '#f44336'; // Rot
-            if (statuses.every(s => s === 'kein_interesse')) return '#424242'; // Dunkelgrau
+            if (statuses.includes('erfolg')) return '#4caf50';
+            if (statuses.includes('termin')) return '#9c27b0';
+            if (statuses.includes('angebot')) return '#ffc107';
+            if (statuses.includes('nicht_da')) return '#f44336';
+            if (statuses.every(s => s === 'kein_interesse')) return '#424242';
             
-            return '#888888'; // Grau (Offen)
+            return '#888888';
         }
 
         function createBuildingIcon(partyCount, color) {
@@ -519,15 +502,16 @@
             const newBuilding = {
                 lat: lat,
                 lng: lng,
-                address: defaultAddress || 'Adresse wird geladen...',
+                address: defaultAddress || 'Adresse wird ermittelt...',
                 parties: [
                     { 
                         floor: 'EG', 
                         name: '', 
                         status: 'offen', 
                         sparte: 'Strom', 
-                        provider: 'Grundversorgung', 
-                        details: '', 
+                        provider: '', 
+                        consumption: '',
+                        price: '', 
                         meterNo: '', 
                         note: '' 
                     }
@@ -538,6 +522,7 @@
             const newIndex = buildings.length - 1;
             saveStorage();
             renderMarkers();
+            
             openModal(newIndex);
 
             if (!defaultAddress) {
@@ -551,13 +536,13 @@
                         document.getElementById('buildingAddress').value = fetchedAddress;
                         saveStorage();
                     } else {
-                        buildings[newIndex].address = '';
-                        document.getElementById('buildingAddress').value = '';
+                        buildings[newIndex].address = 'Adresse unbekannt';
+                        document.getElementById('buildingAddress').value = 'Adresse unbekannt';
                     }
                 } catch (error) {
-                    console.error("Fehler bei Adressermittlung (möglicherweise offline):", error);
-                    buildings[newIndex].address = 'Offline (Manuell eintragen)';
-                    document.getElementById('buildingAddress').value = 'Offline (Manuell eintragen)';
+                    console.error("Fehler bei Adressermittlung:", error);
+                    buildings[newIndex].address = 'Adresse konnte nicht geladen werden';
+                    document.getElementById('buildingAddress').value = 'Adresse konnte nicht geladen werden';
                 }
             }
         }
@@ -588,7 +573,7 @@
                         results.forEach(place => {
                             const item = document.createElement('div');
                             item.className = 'search-item';
-                            item.innerText = place.display_name;
+                            item.innerText = place.display_name.replace(/Kuhschnappel/gi, 'Sankt Egidien');
 
                             item.onclick = () => {
                                 const lat = parseFloat(place.lat);
@@ -632,6 +617,16 @@
             activeBuildingIndex = null;
         }
 
+        function getUnitsForSparte(sparte) {
+            if (sparte === 'Gas') {
+                return { consumption: 'kWh', price: 'ct/kWh' };
+            } else if (sparte === 'Kombi') {
+                return { consumption: 'kWh (S/G)', price: 'ct/kWh' };
+            } else {
+                return { consumption: 'kWh', price: 'ct/kWh' };
+            }
+        }
+
         function renderParties(parties) {
             const container = document.getElementById('partiesContainer');
             container.innerHTML = '';
@@ -644,6 +639,11 @@
             parties.forEach((party, pIndex) => {
                 const card = document.createElement('div');
                 card.className = `party-card ${party.status || 'offen'}`;
+
+                let rawConsumption = party.consumption !== undefined ? party.consumption : (party.details || '');
+                let rawPrice = party.price || '';
+                const sparte = party.sparte || 'Strom';
+                const units = getUnitsForSparte(sparte);
 
                 card.innerHTML = `
                     <div class="party-row" style="justify-content: space-between; align-items: center;">
@@ -667,21 +667,23 @@
                     </div>
 
                     <div class="party-row">
-                        <select style="flex: 1;" onchange="updateParty(${pIndex}, 'sparte', this.value)">
-                            <option value="Strom" ${party.sparte === 'Strom' ? 'selected' : ''}>⚡ Strom</option>
-                            <option value="Gas" ${party.sparte === 'Gas' ? 'selected' : ''}>🔥 Gas</option>
-                            <option value="Kombi" ${party.sparte === 'Kombi' ? 'selected' : ''}>⚡+🔥 Kombi</option>
+                        <select style="flex: 1;" onchange="updateParty(${pIndex}, 'sparte', this.value); updateSparteUnits(${pIndex}, this.value);">
+                            <option value="Strom" ${sparte === 'Strom' ? 'selected' : ''}>⚡ Strom</option>
+                            <option value="Gas" ${sparte === 'Gas' ? 'selected' : ''}>🔥 Gas</option>
+                            <option value="Kombi" ${sparte === 'Kombi' ? 'selected' : ''}>⚡+🔥 Kombi</option>
                         </select>
-                        <select style="flex: 1.2;" onchange="updateParty(${pIndex}, 'provider', this.value)">
-                            <option value="Grundversorgung" ${party.provider === 'Grundversorgung' ? 'selected' : ''}>Grundversorgung</option>
-                            <option value="enviaM" ${party.provider === 'enviaM' ? 'selected' : ''}>enviaM</option>
-                            <option value="E.ON" ${party.provider === 'E.ON' ? 'selected' : ''}>E.ON</option>
-                            <option value="Sonstiges" ${party.provider === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
-                        </select>
+                        <input type="text" style="flex: 1.2;" placeholder="Anbieter eintragen" value="${party.provider || ''}" onchange="updateParty(${pIndex}, 'provider', this.value)">
                     </div>
 
                     <div class="party-row">
-                        <input type="text" placeholder="Verbrauch / Aktueller Preis (z.B. 3500 kWh / 38ct)" value="${party.details || ''}" onchange="updateParty(${pIndex}, 'details', this.value)">
+                        <div class="input-group">
+                            <input type="text" placeholder="Verbrauch" value="${rawConsumption}" onchange="updateParty(${pIndex}, 'consumption', this.value)">
+                            <span class="unit-label" id="unit-consumption-${pIndex}">${units.consumption}</span>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" placeholder="Akt. Preis" value="${rawPrice}" onchange="updateParty(${pIndex}, 'price', this.value)">
+                            <span class="unit-label" id="unit-price-${pIndex}">${units.price}</span>
+                        </div>
                     </div>
 
                     <div class="party-row">
@@ -697,6 +699,15 @@
             });
         }
 
+        function updateSparteUnits(pIndex, newSparte) {
+            const units = getUnitsForSparte(newSparte);
+            const consElem = document.getElementById(`unit-consumption-${pIndex}`);
+            const priceElem = document.getElementById(`unit-price-${pIndex}`);
+            
+            if (consElem) consElem.innerText = units.consumption;
+            if (priceElem) priceElem.innerText = units.price;
+        }
+
         function addParty() {
             if (activeBuildingIndex === null) return;
             buildings[activeBuildingIndex].parties.push({ 
@@ -704,8 +715,9 @@
                 name: '', 
                 status: 'offen', 
                 sparte: 'Strom', 
-                provider: 'Grundversorgung', 
-                details: '', 
+                provider: '', 
+                consumption: '',
+                price: '', 
                 meterNo: '', 
                 note: '' 
             });
@@ -790,7 +802,7 @@
             }
 
             let csvContent = "\uFEFF";
-            csvContent += "Adresse;Etage;Name;Status;Sparte;Anbieter;Verbrauch_Preis;Zaehlernummer;Notiz;Lat;Lng\n";
+            csvContent += "Adresse;Etage;Name;Status;Sparte;Anbieter;Verbrauch;Aktueller_Preis;Zaehlernummer;Notiz;Lat;Lng\n";
 
             const statusMap = {
                 'offen': 'Offen',
@@ -812,15 +824,21 @@
                         const name = `"${(party.name || '').replace(/"/g, '""')}"`;
                         const status = `"${statusMap[party.status] || party.status}"`;
                         const sparte = `"${party.sparte || ''}"`;
-                        const provider = `"${party.provider || ''}"`;
-                        const details = `"${(party.details || '').replace(/"/g, '""')}"`;
+                        const provider = `"${(party.provider || '').replace(/"/g, '""')}"`;
+                        
+                        let cVal = party.consumption !== undefined ? party.consumption : (party.details || '');
+                        const consumption = `"${(cVal || '').toString().replace(/"/g, '""')}"`;
+
+                        let pVal = party.price || '';
+                        const price = `"${(pVal || '').toString().replace(/"/g, '""')}"`;
+                        
                         const meterNo = `"${(party.meterNo || '').replace(/"/g, '""')}"`;
                         const note = `"${(party.note || '').replace(/"/g, '""')}"`;
 
-                        csvContent += `${addr};${floor};${name};${status};${sparte};${provider};${details};${meterNo};${note};${lat};${lng}\n`;
+                        csvContent += `${addr};${floor};${name};${status};${sparte};${provider};${consumption};${price};${meterNo};${note};${lat};${lng}\n`;
                     });
                 } else {
-                    csvContent += `${addr};"";"";"Keine Parteien";"";"";"";"";"";${lat};${lng}\n`;
+                    csvContent += `${addr};"";"";"Keine Parteien";"";"";"";"";"";"";${lat};${lng}\n`;
                 }
             });
 
@@ -836,7 +854,6 @@
             document.body.removeChild(link);
         }
 
-        // Standortabfrage mit Absicherung
         function locateUser() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
@@ -860,7 +877,6 @@
             }
         }
 
-        // Starten & Render-Größe erzwingen
         renderMarkers();
         setTimeout(() => {
             map.invalidateSize();
