@@ -322,8 +322,8 @@
             background: #181818;
             border: 1px solid #333;
             color: #fff;
-            padding: 8px 10px;
-            border-radius: 8px;
+            padding: 6px 8px;
+            border-radius: 6px;
             font-size: 12px;
             width: 100%;
         }
@@ -331,20 +331,6 @@
         input:focus, select:focus {
             border-color: #ff9800;
             outline: none;
-        }
-
-        /* Exaktes Dropdown-Design passend zum Screenshot */
-        select {
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-color: #181818;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aaaaaa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 10px center;
-            background-size: 14px;
-            padding-right: 30px;
-            cursor: pointer;
         }
 
         .btn {
@@ -408,6 +394,7 @@
                                 return response;
                             }
                             return fetch(event.request).then(networkResponse => {
+                                // Dynamisches Caching für gesehene Map-Kacheln und Nominatim-Anfragen
                                 if (!event.request.url.includes('chrome-extension')) {
                                     return caches.open(CACHE_NAME).then(cache => {
                                         cache.put(event.request, networkResponse.clone());
@@ -416,6 +403,7 @@
                                 }
                                 return networkResponse;
                             }).catch(() => {
+                                // Fallback, falls offline und nicht im Cache
                                 return new Response('Offline-Modus aktiv');
                             });
                         })
@@ -510,7 +498,7 @@
 
         function saveStorage() {
             localStorage.setItem('d2d_energy_buildings', JSON.stringify(buildings));
-        }
-    </script>
-</body>
-</html>
+       
+
+
+ Ka
