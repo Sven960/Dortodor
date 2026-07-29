@@ -79,9 +79,9 @@
         <div class="input-group">
             <input type="text" id="addressInput" placeholder="z.B. Schulstr. 39, St. Egidien">
             <select id="statusSelect">
-                <option value="Neu">Neu / Offen</option>
-                <option value="Kunde">Kunde geworden</option>
-                <option value="Kein Interesse">Kein Interesse</option>
+                <option value="Grundversorgung">Grundversorgung</option>
+                <option value="Wettbewerb">Wettbewerb</option>
+                <option value="Sondervertrag">Sondervertrag</option>
             </select>
             <button id="saveBtn">Speichern</button>
         </div>
@@ -101,10 +101,10 @@
         // Größeres Icon für Stecknadeln definiert
         const customPinIcon = L.divIcon({
             className: 'custom-pin',
-            html: '<div style="background-color: #ff3333; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
-            popupAnchor: [0, -15]
+            html: '<div style="background-color: #ff3333; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 6px rgba(0,0,0,0.5);"></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -17]
         });
 
         let markers = [];
@@ -112,11 +112,11 @@
         // Funktion zum Hinzufügen von Markern auf der Karte
         function addMarker(lat, lng, addressText, status) {
             const marker = L.marker([lat, lng], { icon: customPinIcon }).addTo(map);
-            marker.bindPopup(`<b>Adresse:</b> ${addressText}<br><b>Status:</b> ${status}`);
+            marker.bindPopup(`<b>Adresse:</b> ${addressText}<br><b>Kategorie:</b> ${status}`);
             markers.push(marker);
         }
 
-        // Beispiel-Event für den Speichern-Button mit Nominatim Geocoding (Straße, Hausnummer, Ort)
+        // Event für den Speichern-Button mit Nominatim Geocoding (Straße, Hausnummer, Ort)
         document.getElementById('saveBtn').addEventListener('click', function() {
             const address = document.getElementById('addressInput').value;
             const status = document.getElementById('statusSelect').value;
@@ -126,7 +126,6 @@
                 return;
             }
 
-            // Anfrage an Nominatim für Straße, Hausnummer und Ort
             const queryUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
 
             fetch(queryUrl)
