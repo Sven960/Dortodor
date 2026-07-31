@@ -289,41 +289,6 @@
             gap: 6px;
         }
 
-        .input-group {
-            display: flex;
-            align-items: center;
-            background: #181818;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 0 8px;
-            flex: 1;
-        }
-
-        .input-group:focus-within {
-            border-color: #ff9800;
-        }
-
-        .input-group input {
-            border: none;
-            background: transparent;
-            padding: 6px 0;
-            width: 100%;
-        }
-
-        .input-group input:focus {
-            border-color: transparent;
-            outline: none;
-        }
-
-        .input-group .unit-label {
-            font-size: 10px;
-            color: #ff9800;
-            font-weight: bold;
-            padding-left: 4px;
-            white-space: nowrap;
-            user-select: none;
-        }
-
         input, select {
             background: #181818;
             border: 1px solid #333;
@@ -826,17 +791,11 @@
 
                     <div class="party-row">
                         <input type="text" placeholder="Aktueller Anbieter" value="${p.provider || ''}" onchange="updateParty(${idx}, 'provider', this.value)">
-                        <div class="input-group">
-                            <input type="text" placeholder="Verbrauch" value="${p.consumption || ''}" onchange="updateParty(${idx}, 'consumption', this.value)">
-                            <span class="unit-label">kWh</span>
-                        </div>
+                        <input type="text" placeholder="Verbrauch (kWh)" value="${p.consumption || ''}" onchange="updateParty(${idx}, 'consumption', this.value)">
                     </div>
 
                     <div class="party-row">
-                        <div class="input-group">
-                            <input type="text" placeholder="Preis mtl." value="${p.price || ''}" onchange="updateParty(${idx}, 'price', this.value)">
-                            <span class="unit-label">€/Monat</span>
-                        </div>
+                        <input type="text" placeholder="Preis (€/kWh)" value="${p.price || ''}" onchange="updateParty(${idx}, 'price', this.value)">
                         <input type="text" placeholder="Zählernummer" value="${p.meterNo || ''}" onchange="updateParty(${idx}, 'meterNo', this.value)">
                     </div>
 
@@ -983,7 +942,7 @@
 
         function exportToCSV() {
             let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-            csvContent += "Adresse;Breitengrad;Längengrad;Etage;Name;Status;Sparte;Anbieter;Verbrauch_kWh;Preis_EUR;Zaehlernummer;Notizen\n";
+            csvContent += "Adresse;Breitengrad;Längengrad;Etage;Name;Status;Sparte;Anbieter;Verbrauch_kWh;Preis_EUR_per_kWh;Zaehlernummer;Notizen\n";
 
             buildings.forEach(bld => {
                 (bld.parties || []).forEach(p => {
